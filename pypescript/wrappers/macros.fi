@@ -1,0 +1,24 @@
+#include "section_names_f90.fi"
+
+#define DECLARATIONS integer(kind=DataBlock_status) :: status ; \
+  integer(kind=DataBlock_type), value :: config_block, data_block ; \
+  character(len=*) :: name ; \
+
+#define GENERATE_CINTERFACE_FUNCTION(__module_name,__function) ; \
+function /**/__function/**/(cname, config_block, data_block) result(status) bind(C, name="__function") ; \
+  use pypescript_block ; \
+  use pypescript_types ; \
+  use FModule, only: fsetup => setup, fexecute => execute, fcleanup => cleanup ; \
+  implicit none ; \
+  integer(kind=DataBlock_status) :: status ; \
+  integer(kind=DataBlock_type), value :: config_block, data_block ; \
+  type(c_ptr), value :: cname ; \
+  character(len=DATABLOCK_MAX_STRING_LENGTH) :: name ; \
+  name = c_string_to_fortran(cname, int(DATABLOCK_MAX_STRING_LENGTH,kind=c_size_t)) ; \
+  status = f/**/__function/**/(trim(name), config_block, data_block) ; \
+end function /**/__function/**/ ; \
+
+#define GENERATE_CINTERFACE(__module_name) ; \
+  GENERATE_CINTERFACE_FUNCTION(__module_name,setup) ; \
+  GENERATE_CINTERFACE_FUNCTION(__module_name,execute) ; \
+  GENERATE_CINTERFACE_FUNCTION(__module_name,cleanup) ;

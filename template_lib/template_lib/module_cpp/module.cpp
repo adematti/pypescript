@@ -1,0 +1,177 @@
+#include <iostream>
+using namespace std;
+#include "pypelib.h"
+#include "module.hpp"
+
+
+// Here we define stuff only useful for the tests performed in the module
+#define ANSWER 42
+#define ASIZE 100
+#define NDIM 1
+#define GENERATE_ALL(__type)\
+  int all##__type(__type * array, __type scalar, size_t size) {\
+      for (size_t i=0;i<size;i++) {\
+        if (array[i] != scalar) return 0;\
+    }\
+    return 1;\
+  }
+
+GENERATE_ALL(int)
+GENERATE_ALL(long)
+GENERATE_ALL(float)
+GENERATE_ALL(double)
+
+
+extern "C" {
+
+const char * MODULE_NAME = "CPPModule";
+
+
+int setup(const char * name, DataBlock *config_block, DataBlock *data_block) {
+  // Set up module (called at the beginning)
+  // In the following we are doing stupid things as an example
+  // Return -1 if something wrong happens
+  int status = 0;
+  status = log_info(MODULE_NAME, "Setting up module [%s].", name);
+  int answer = 0;
+  long long_answer = 0;
+  float float_answer = 0.;
+  double double_answer = 0.;
+  // Setting a (default) value as last argument makes the provided pointer point to this value if no value is found in config_block
+  // This uses a va_list, the default value should be of the correct type!
+  if (DataBlock_get_int_default(config_block, name, "answer", &answer, ANSWER) < 0) return -1;
+  if (answer != ANSWER) return -1;
+  if (DataBlock_get_long_default(config_block, name, "answer", &long_answer, ANSWER) < 0) return -1;
+  if (long_answer != ANSWER) return -1;
+  if (DataBlock_get_float_default(config_block, name, "answer", &float_answer, (float) ANSWER) < 0) return -1;
+  if (float_answer != ANSWER) return -1;
+  if (DataBlock_get_double_default(config_block, name, "answer", &double_answer, (float) ANSWER) < 0) return -1;
+  if (double_answer != ANSWER) return -1;
+  if (DataBlock_set_int(data_block, PARAMETERS_SECTION, "int", ANSWER) != 0) return -1;
+  if (DataBlock_set_long(data_block, PARAMETERS_SECTION, "long", ANSWER) != 0) return -1;
+  if (DataBlock_set_float(data_block, PARAMETERS_SECTION, "float", ANSWER) != 0) return -1;
+  if (DataBlock_set_double(data_block, PARAMETERS_SECTION, "double", ANSWER) != 0) return -1;
+  // Note that DataBlock_set_string creates a copy of the passed value: you should free it if necessary, for example:
+  char * string_scalar = (char *) malloc(sizeof(char)*10);
+  sprintf(string_scalar,"string");
+  if (DataBlock_set_string(data_block, PARAMETERS_SECTION, "string", string_scalar) != 0) return -1;
+  free(string_scalar);
+  int ndim = NDIM;
+  size_t shape[1] = {ASIZE};
+  int *int_array = (int *) malloc(sizeof(int)*ASIZE);
+  for (size_t i=0;i<ASIZE;i++) int_array[i] = answer;
+  long *long_array = (long *) malloc(sizeof(long)*ASIZE);
+  for (size_t i=0;i<ASIZE;i++) long_array[i] = (long) answer;
+  float *float_array = (float *) malloc(sizeof(float)*ASIZE);
+  for (size_t i=0;i<ASIZE;i++) float_array[i] = (float) answer;
+  double *double_array = (double *) malloc(sizeof(double)*ASIZE);
+  for (size_t i=0;i<ASIZE;i++) double_array[i] = (double) answer;
+  // DataBlock_set_xxx_array steals the reference, i.e. it takes full responsibility of the array it receives
+  // Hence these arrays should not be freed
+  // Hence NEVER do DataBlock_set_xxx_array with an array (and shape) coming from DataBlock_get_xxx_array:
+  // as the array might be freed using the first pointer without the second knowing it
+  // Rather use DataBlock_duplicate_value (or DataBlock_move_value) which will increase the reference counter appropriately
+  if (DataBlock_set_int_array(data_block, PARAMETERS_SECTION, "int_array", int_array, ndim, shape) != 0) return -1;
+  if (DataBlock_set_long_array(data_block, PARAMETERS_SECTION, "long_array", long_array, ndim, shape) != 0) return -1;
+  if (DataBlock_set_float_array(data_block, PARAMETERS_SECTION, "float_array", float_array, ndim, shape) != 0) return -1;
+  if (DataBlock_set_double_array(data_block, PARAMETERS_SECTION, "double_array", double_array, ndim, shape) != 0) return -1;
+  return status;
+}
+
+
+int execute(const char * name, DataBlock *config_block, DataBlock *data_block) {
+  // Execute module, i.e. do calculation (called at each iteration)
+  // In the following we are doing stupid things as an example
+  // Return -1 if something wrong happens
+  int status = 0;
+  status = log_info(MODULE_NAME, "Executing module [%s].", name);
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "int")) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "int") != 0) return -1;
+  // Deleting an already-deleted value is silly
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "int") == 0) return -1;
+  // So let's suppress all previous errors (not be used with caution)
+  clear_errors();
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "long")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "float")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "double")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "string")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "int_array")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "long_array")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "float_array")) return -1;
+  if (!DataBlock_has_value(data_block, PARAMETERS_SECTION, "double_array")) return -1;
+  if (DataBlock_move_value(data_block, PARAMETERS_SECTION, "long", PARAMETERS_SECTION, "long2") != 0) return -1;
+  if (DataBlock_duplicate_value(data_block, PARAMETERS_SECTION, "int_array", PARAMETERS_SECTION, "int_array2") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "long2") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "float") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "double") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "string") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "int_array") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "int_array2") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "long_array") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "float_array") != 0) return -1;
+  if (DataBlock_del_value(data_block, PARAMETERS_SECTION, "double_array") != 0) return -1;
+  if (setup(name, config_block, data_block) != 0) return -1;
+  int ndim = NDIM;
+  size_t *shape;
+  int int_scalar, *int_array;
+  long long_scalar, *long_array;
+  float float_scalar, *float_array;
+  double double_scalar, *double_array;
+  char *string_scalar;
+  int answer = ANSWER;
+  if (DataBlock_get_int_default(config_block, name, "answer", &answer, answer) < 0) return -1;
+  status = log_info(MODULE_NAME, "Answer is %d.", answer);
+  // NULL as last argument: exception raised if value not in data_block
+  if (DataBlock_get_int(data_block, PARAMETERS_SECTION, "int", &int_scalar) < 0) return -1;
+  status = log_info(MODULE_NAME, "int is %d.", int_scalar);
+  if (DataBlock_get_long(data_block, PARAMETERS_SECTION, "long", &long_scalar) < 0) return -1;
+  status = log_info(MODULE_NAME, "long is %ld.", long_scalar);
+  if (DataBlock_get_float(data_block, PARAMETERS_SECTION, "float", &float_scalar) < 0) return -1;
+  status = log_info(MODULE_NAME, "float is %.3f.", float_scalar);
+  if (DataBlock_get_double(data_block, PARAMETERS_SECTION, "double", &double_scalar) < 0) return -1;
+  status = log_info(MODULE_NAME, "double is %.3f.", double_scalar);
+  if (DataBlock_get_string(data_block, PARAMETERS_SECTION, "string", &string_scalar) < 0) return -1;
+  status = log_info(MODULE_NAME, "string is %s.", string_scalar);
+  if (DataBlock_get_int_array(data_block, PARAMETERS_SECTION, "int_array", &int_array, &ndim, &shape) < 0) return -1;
+  if ((ndim != NDIM) || (shape[0] != ASIZE) || !allint(int_array,answer,ASIZE)) return -1;
+  if (DataBlock_get_long_array(data_block, PARAMETERS_SECTION, "long_array", &long_array, &ndim, &shape) < 0) return -1;
+  if ((ndim != NDIM) || (shape[0] != ASIZE) || !alllong(long_array,answer,ASIZE)) return -1;
+  if (DataBlock_get_float_array(data_block, PARAMETERS_SECTION, "float_array", &float_array, &ndim, &shape) < 0) return -1;
+  if ((ndim != NDIM) || (shape[0] != ASIZE) || !allfloat(float_array,(float) answer,ASIZE)) return -1;
+  if (DataBlock_get_double_array(data_block, PARAMETERS_SECTION, "double_array", &double_array, &ndim, &shape) < 0) return -1;
+  if ((ndim != NDIM) || (shape[0] != ASIZE) || !alldouble(double_array,(double) answer,ASIZE)) return -1;
+  // In place operations, values in DataBlock updated automatically
+  for (size_t i=0;i<shape[0];i++)
+  {
+    int_array[i] += 1;
+    long_array[i] += 2;
+    float_array[i] += 1;
+    double_array[i] += 2;
+  }
+  int answer2 = answer + 1;
+  // This will cast int to long, authorised (the inverse is not!); then int_array may not be alive anymore
+  if (DataBlock_get_long_array(data_block, PARAMETERS_SECTION, "int_array", &long_array, &ndim, &shape) < 0) return -1;
+  if ((ndim != NDIM) || (shape[0] != ASIZE) || !alllong(long_array,answer2,shape[0])) return -1;
+  for (size_t i=0;i<shape[0];i++) long_array[i] += 1;
+  if (DataBlock_get_double_array(data_block, PARAMETERS_SECTION, "float_array", &double_array, &ndim, &shape) < 0) return -1;
+  if ((ndim != NDIM) || (shape[0] != ASIZE) || !alldouble(double_array,answer2,shape[0])) return -1;
+  for (size_t i=0;i<shape[0];i++) double_array[i] += 1;
+  // Now let's read in arrays defined in other modules
+  if (DataBlock_get_int_array(data_block, "external", "int_array", &int_array, &ndim, &shape) < 0) return -1;
+  status = log_info(MODULE_NAME, "External int array elements are [%d %d ...].", int_array[0], int_array[1]);
+  status = log_info(MODULE_NAME, "External int array dimensions are %d, shape is (%d, ...).", ndim, shape[0]);
+  if (DataBlock_get_float_array(data_block, "external", "float_array", &float_array, &ndim, &shape) < 0) return -1;
+  status = log_info(MODULE_NAME, "External float array elements are [%.3f %.3f ...].", float_array[0], float_array[1]);
+  status = log_info(MODULE_NAME, "External float array dimensions are %d, shape is (%d, ...).", ndim, shape[0]);
+  for (size_t i=0;i<shape[0];i++) int_array[i] += 1;
+  for (size_t i=0;i<shape[0];i++) float_array[i] += 1;
+  return status;
+}
+
+int cleanup(const char * name, DataBlock *config_block, DataBlock *data_block) {
+  // Clean up, i.e. free variables if needed (called at the end)
+  int status = log_info(MODULE_NAME, "Cleaning up module [%s].", name);
+  return status;
+}
+
+}

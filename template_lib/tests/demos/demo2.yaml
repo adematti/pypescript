@@ -1,0 +1,41 @@
+main:
+  modules: [like]
+
+like:
+  module_name: template_lib.likelihood
+  module_class: SumLikelihood
+  modules: [like1, like2]
+
+like1:
+  module_name: template_lib.likelihood
+  module_class: GaussianLikelihood
+  modules: [data1, model1, cov1]
+
+like2:
+  module_name: template_lib.likelihood
+  module_class: GaussianLikelihood
+  modules: [data2, model2, cov2]
+
+data1:
+  module_name: template_lib.data_vector
+  y: [1.0,1.0,1.0,1.0,1.0]
+
+model1:
+  module_name: template_lib.model
+  module_class: FlatModel
+
+cov1:
+  module_name: template_lib.covariance
+  yerr: [1.0,1.0,1.0,1.0,1.0]
+
+data2:
+  module_name: template_lib.data_vector
+  y: [1.0,1.0,1.0]
+
+model2:
+  module_name: template_lib.model
+  module_class: FlatModel
+
+cov2:
+  module_name: template_lib.covariance
+  yerr: [1.0,1.0,1.0]

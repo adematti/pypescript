@@ -1,0 +1,7 @@
+- model
+- data
+- covariance
+- likelihood
+- common
+- parameters
+- nocopy: [parameters, likelihood, common]

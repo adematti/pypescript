@@ -1,0 +1,11 @@
+# .coveragerc to control coverage.py
+# see https://coverage.readthedocs.org/en/coverage-5.3/config.html
+
+[run]
+branch = True
+include = pypescript/*
+
+[report]
+
+[html]
+directory = coverage_html_report

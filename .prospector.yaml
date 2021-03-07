@@ -1,0 +1,28 @@
+pylint:
+  disable:
+    - import-error
+    - import-outside-toplevel
+    - too-many-locals
+    - too-many-arguments
+    - too-many-statements
+    - too-many-branches
+    - arguments-differ
+    - len-as-condition
+    - unbalanced-tuple-unpacking
+    - useless-object-inheritance
+    - unidiomatic-typecheck
+    - logging-format-interpolation
+
+pep8:
+  disable:
+    - W605
+    - W606
+
+pep257:
+  disable:
+    - D203
+    - D212
+
+mccabe:
+  disable:
+    - MC0001
