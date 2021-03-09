@@ -211,18 +211,40 @@ class DataBlock(block.DataBlock,BaseClass):
 
     def copy(self, nocopy=None):
         """
-        Return a shallow copy of ``self``, i.e. only the dictionary mapping the stored items is copy, not the items themselves.
+        Return a shallow copy of ``self``, i.e. only the dictionary mapping to the stored items is copied, not the items themselves.
 
         Parameters
         ----------
         nocopy : list, default=None
             List of sections to **not** copy (such that any change affecting in these sections of ``self`` will affect the
-            returned copy as well.
+            returned copy as well).
             If ``None``, defaults to :attr:`section_names.nocopy`.
+
+        Note
+        ----
+        :attr:`mapping` instance is simply added to the returned :class:`DataBlock` instance, no copy is performed.
         """
         if nocopy is None:
             nocopy = [section for section in section_names.nocopy if section in self]
         return super(DataBlock,self).copy(nocopy=nocopy)
+
+    def update(self, other, nocopy=None):
+        """
+        Update ``self``, i.e. only the dictionary mapping to the stored items is updated with ``other``, not the items themselves.
+
+        Parameters
+        ----------
+        nocopy : list, default=None
+            List of sections to **not** update (such that any change affecting in these sections of ``other`` will affect ``self`` as well.
+            If ``None``, defaults to :attr:`section_names.nocopy`.
+
+        Note
+        ----
+        :attr:`mapping` instance is **not** updated.
+        """
+        if nocopy is None:
+            nocopy = [section for section in section_names.nocopy if section in self]
+        return super(DataBlock,self).update(other,nocopy=nocopy)
 
     def __getstate__(self):
         """Return this class state dictionary."""

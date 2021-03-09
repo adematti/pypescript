@@ -83,7 +83,7 @@ def test_block():
     #block['section_b']['name_c'] = 5
     block['section_b'] = {'name_c':5}
     assert block_copy['section_b'] == block['section_b']
-    block['section_a','name_a'] = np.ones(10000)
+    block['section_a','name_a'] = 1 #np.ones(10000)
     block.set_mapping({'section_c':'section_a'})
     assert np.all(block['section_c','name_a'] == block['section_a','name_a'])
     block.set_mapping(BlockMapping({}))
@@ -110,10 +110,11 @@ def test_block():
     #test['b'] = test
 
 
+
 if __name__ == '__main__':
 
     setup_logging()
     with MemoryMonitor() as mem:
-        for i in range(50000):
+        for i in range(5000):
             test_mapping()
             test_block()

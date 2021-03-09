@@ -71,34 +71,35 @@ def walk_pype_modules(base_dir='.', include_pype_module_names=None, exclude_pype
         Root of the directory tree to explore.
 
     include_pype_module_names : list, default=None
-        List of module names (w.r.t. ``base_dir``) to include.
+        List of module names (w.r.t. ``base_dir``) or regex to include.
         If not ``None``, all modules in ``base_dir`` are considered.
 
     exclude_pype_module_names : list, default=None
-        List of module names (w.r.t. ``base_dir``) to exclude.
+        List of module names (w.r.t. ``base_dir``) or regex to exclude.
         If ``None``, no module is excluded.
     """
     exclude_pype_module_names = exclude_pype_module_names or []
     extensions,modules,requirements = [],[],set()
 
-    def yield_from_description_file(description_file):
-        with open(description_file, 'r') as file:
-            description = yaml.load(file, Loader=yaml.FullLoader)
-        if not check_module_description(description,description_file):
-            return
-        module_dir = os.path.dirname(description_file)
-        full_name = get_module_full_name(os.path.join(module_dir,description['name']), base_dir=base_dir)
-        if full_name in exclude_pype_module_names:
-            return
-        yield module_dir, full_name, description_file, description
-
-    if include_pype_module_names is not None:
-        for full_name in include_pype_module_names:
-            filename = get_module_file_name(full_name,base_dir=base_dir)
-            description_file = '{}.yaml'.format(filename)
-            yield from yield_from_description_file(description_file)
-    else:
-        for module_dir, dirs, files in os.walk(base_dir, followlinks=True):
-            description_files = [os.path.join(module_dir,file) for file in files if file.endswith('.yaml')]
-            for description_file in description_files:
-                yield from yield_from_description_file(description_file)
+    for module_dir, dirs, files in os.walk(base_dir, followlinks=True):
+        description_files = [os.path.join(module_dir,file) for file in files if file.endswith('.yaml')]
+        for description_file in description_files:
+            with open(description_file, 'r') as file:
+                description = yaml.load(file, Loader=yaml.FullLoader)
+            if not check_module_description(description,description_file):
+                return
+            full_name = get_module_full_name(os.path.join(module_dir,description['name']), base_dir=base_dir)
+            if include_pype_module_names is not None:
+                toinclude = False
+                for include in include_pype_module_names:
+                    if re.match(full_name,include):
+                        toinclude = True
+                        break
+                if not toinclude: continue
+            toexclude = False
+            for exclude in exclude_pype_module_names:
+                if re.match(full_name,exclude):
+                    toexclude = True
+                    break
+            if toexclude: continue
+            yield module_dir, full_name, description_file, description

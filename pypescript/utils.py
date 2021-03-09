@@ -68,6 +68,12 @@ def savefile(func):
     return wrapper
 
 
+def snake_to_pascal_case(snake):
+    """Transform string in snake case (name1_name2) into Pascal case (Name1Name2)."""
+    words = snake.split('_')
+    return ''.join(map(str.title,words))
+
+
 class BaseClass(object):
     """
     Base template for **pypescript** classes.
@@ -107,24 +113,6 @@ class BaseClass(object):
         new = self.__class__.__new__(self.__class__)
         new.__dict__.update(self.__dict__)
         return new
-
-
-def txt_to_latex(txt):
-    """Transform standard text into latex by replacing '_xxx' with '_{xxx}' and '^xxx' with '^{xxx}'."""
-    latex = ''
-    txt = list(txt)
-    for c in txt:
-        latex += c
-        if c in ['_','^']:
-            latex += '{'
-            txt += '}'
-    return latex
-
-
-def snake_to_pascal_case(snake):
-    """Transform string in snake case (name1_name2) into Pascal case (Name1Name2)."""
-    words = snake.split('_')
-    return ''.join(map(str.title,words))
 
 
 class MemoryMonitor(object):

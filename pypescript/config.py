@@ -13,6 +13,11 @@ def parse_yaml(string):
     return data
 
 
+class ConfigError(Exception):
+
+    pass
+
+
 class ConfigBlock(DataBlock):
     """
     This class handles the pipeline configurations.

@@ -1,12 +1,13 @@
 main:
   modules: [like]
-  common_parameters: demos/param4.yaml
 
 like:
   module_name: template_lib.likelihood
   module_class: JointGaussianLikelihood
   join: [like1, like2]
   modules: [cov]
+  datablock_copy:
+    data.ysave: data.ysave
 
 like1:
   module_name: template_lib.likelihood
@@ -17,27 +18,22 @@ like2:
   module_name: template_lib.likelihood
   module_class: BaseLikelihood
   modules: [data2, model2]
+  datablock_copy:
+    data.ysave: data.ysave
 
 data1:
   module_name: template_lib.data_vector
   y: [1.0,1.0,1.0,1.0,1.0]
-  datablock_copy:
-    data.y: common.y_data1
 
 model1:
   module_name: template_lib.model
-  module_class: AffineModel
-  # update common parameters with these parameters
-  common_parameters: demos/param4_model1.yaml
-  # add specific parameters for this model, in the form {param}_model1
-  specific_parameters: demos/param4_model1_specific.yaml
-  # convert names within the scope of this module
-  datablock_mapping:
-    parameters.b_model1: parameters.b
+  module_class: FlatModel
 
 data2:
   module_name: template_lib.data_vector
   y: [1.0,1.0,1.0]
+  datablock_copy:
+    data.y: data.ysave
 
 model2:
   module_name: template_lib.model

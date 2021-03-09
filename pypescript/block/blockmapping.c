@@ -98,7 +98,6 @@ static PyObject * mapping_clear(PyBlockMapping *self)
   Py_RETURN_NONE;
 }
 
-
 static PyObject * mapping_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
   PyBlockMapping *self = (PyBlockMapping *) type->tp_alloc(type, 0);
@@ -115,7 +114,6 @@ finally:
   return (PyObject *) self;
 }
 
-
 PyBlockMapping * PyBlockMapping_New(void)
 {
   PyBlockMapping *toret = PyObject_GC_New(PyBlockMapping, &PyBlockMappingType);
@@ -130,7 +128,6 @@ except:
 finally:
   return toret;
 }
-
 
 int PyBlockMapping_Update(PyBlockMapping *self, PyObject *other)
 {
@@ -169,7 +166,6 @@ static PyObject * mapping_update(PyBlockMapping *self, PyObject *other)
   return NULL;
 }
 
-
 PyBlockMapping * PyBlockMapping_Copy(PyBlockMapping *self)
 {
   PyBlockMapping *toret = PyBlockMapping_New();
@@ -184,7 +180,7 @@ finally:
   return toret;
 }
 
-static PyObject * mapping_data_getter(PyDataBlock* self, void * closure) {
+static PyObject * mapping_data_getter(PyDataBlock *self, void *closure) {
   PyObject * toret = (PyObject *) self->data;
   Py_XINCREF(toret);
   return toret;

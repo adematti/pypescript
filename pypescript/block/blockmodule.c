@@ -11,7 +11,7 @@ PyObject * PyDataBlock_Sections(PyDataBlock *self)
 }
 
 
-PyObject * PyDataBlock_Keys(PyDataBlock *self, PyObject *args, PyObject *kwds)
+PyObject * datablock_keys(PyDataBlock *self, PyObject *args, PyObject *kwds)
 {
   static char *kwlist[] = {"section", NULL};
   PyObject *section = NULL;
@@ -183,7 +183,7 @@ finally:
   return toret;
 }
 
-PyObject * PyDataBlock_Get(PyDataBlock *self, PyObject *args, PyObject *kwds)
+PyObject * datablock_get(PyDataBlock *self, PyObject *args, PyObject *kwds)
 {
   // Return new references
   PyObject *section = NULL, *name = NULL, *default_value = NULL;
@@ -199,15 +199,15 @@ PyObject * PyDataBlock_Get(PyDataBlock *self, PyObject *args, PyObject *kwds)
 
 PyObject * PyDataBlock_GetItem(PyDataBlock *self, PyObject *key)
 {
-  if (PyTuple_Check(key)) return PyDataBlock_Get(self, key, NULL);
+  if (PyTuple_Check(key)) return datablock_get(self, key, NULL);
   return PyDataBlock_GetSection(self, key, NULL);
 }
 
-PyObject * PyDataBlock_Items(PyDataBlock *self, PyObject *args, PyObject *kwds)
+PyObject * datablock_items(PyDataBlock *self, PyObject *args, PyObject *kwds)
 {
   PyObject *keys = NULL, *key, *value, *item, *iter_keys = NULL, *items = PyList_New(0);
   if (items == NULL) goto except;
-  keys = PyDataBlock_Keys(self, args, kwds);
+  keys = datablock_keys(self, args, kwds);
   if (keys == NULL) goto except;
   iter_keys = PyObject_GetIter(keys);
   if (iter_keys == NULL) goto except;
@@ -284,7 +284,7 @@ finally:
 }
 
 
-PyObject * PyDataBlock_Set(PyDataBlock *self, PyObject *args)
+PyObject * datablock_set(PyDataBlock *self, PyObject *args)
 {
   // Does not steal reference
   int toret = 0;
@@ -404,7 +404,7 @@ finally:
   return toret;
 }
 
-int PyDataBlock_Update(PyDataBlock *self, PyObject *other)
+int PyDataBlock_Update(PyDataBlock *self, PyObject *other, PyObject *nocopy)
 {
   int toret = 0;
   Py_ssize_t position = 0;
@@ -419,15 +419,29 @@ int PyDataBlock_Update(PyDataBlock *self, PyObject *other)
     Py_INCREF(other);
     Py_DECREF(tmp);
   }
-  //printf("I'm here4!!!\n");
+
   if (!PyDict_Check(other)) {
     PyErr_SetString(PyExc_TypeError,"Please provide a dictionary.");
     goto except;
   }
-  //printf("I'm here5 %ld!!!\n",position);
+
+  if (nocopy == NULL) {
+    while (PyDict_Next(other, &position, &section, &item)) {
+      if (PyDataBlock_SetSection(self, section, item) != 0) goto except;
+    }
+    goto finally;
+  }
+  if ((!PyTuple_Check(nocopy)) & (!PyList_Check(nocopy))) {
+    PyErr_SetString(PyExc_TypeError,"Argument 'nocopy' should be a tuple or list.");
+    goto except;
+  }
   while (PyDict_Next(other, &position, &section, &item)) {
-    //printf("Position %ld\n",position);
-    if (PyDataBlock_SetSection(self, section, item) != 0) goto except;
+    int contains = PySequence_Contains(nocopy, section);
+    if (contains < 0) goto except;
+    else if (contains) {
+      if (PyDict_SetItem((PyObject *) self->data, section, item) != 0) goto except;
+    }
+    else if (PyDataBlock_SetSection(self, section, item) != 0) goto except;
   }
   goto finally;
 except:
@@ -437,12 +451,14 @@ finally:
   return toret;
 }
 
-static PyObject * datablock_update(PyDataBlock *self, PyObject *other)
+static PyObject * datablock_update(PyDataBlock *self, PyObject *args, PyObject *kwds)
 {
-  if (PyDataBlock_Update(self, other) == 0) Py_RETURN_NONE;
+  static char *kwlist[] = {"other", "nocopy", NULL};
+  PyObject *other = NULL, *nocopy = NULL;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist, &other, &nocopy)) return NULL;
+  if (PyDataBlock_Update(self, other, nocopy) == 0) Py_RETURN_NONE;
   return NULL;
 }
-
 
 static PyObject * datablock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
@@ -482,49 +498,32 @@ finally:
   return toret;
 }
 
-PyDataBlock * PyDataBlock_Copy(PyDataBlock *self, PyObject *args, PyObject *kwds)
+PyDataBlock * PyDataBlock_Copy(PyDataBlock *self, PyObject *nocopy)
 {
   PyDataBlock *toret = NULL;
-  PyBlockMapping *mapping = NULL;
-  PyObject *nocopy = NULL, *iter_sections = NULL, *section = NULL, *item = NULL;
 
   toret = PyDataBlock_New();
   if (toret == NULL) goto except;
 
-  if (PyDataBlock_Update(toret, (PyObject *) self) != 0) goto except;
+  if (PyDataBlock_Update(toret, (PyObject *) self, nocopy) != 0) goto except;
 
-  mapping = PyBlockMapping_Copy(self->mapping);
-  if (mapping == NULL) goto except;
+  Py_INCREF(self->mapping);
   Py_CLEAR(toret->mapping);
-  toret->mapping = mapping;
-
-  static char *kwlist[] = {"nocopy", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist, &nocopy)) goto except;
-
-  if (nocopy == NULL) goto finally;
-  Py_INCREF(nocopy);
-  if ((!PyTuple_Check(nocopy)) & (!PyList_Check(nocopy))) {
-    PyErr_SetString(PyExc_TypeError,"Argument 'nocopy' should be a tuple or list.");
-    goto except;
-  }
-  iter_sections = PyObject_GetIter(nocopy); // raises error if NULL
-  if (iter_sections == NULL) goto except;
-  while ((section = PyIter_Next(iter_sections))) {
-    item = PyDataBlock_GetSection(self, section, NULL);
-    if (item == NULL) {Py_XDECREF(section); goto except;};
-    if (PyDict_SetItem((PyObject *) toret->data, section, item) != 0) {Py_XDECREF(section); goto except;};
-    Py_XDECREF(item);
-    Py_XDECREF(section);
-  }
+  toret->mapping = self->mapping;
   goto finally;
 except:
-  Py_XDECREF(mapping);
   Py_XDECREF(toret);
   toret = NULL;
 finally:
-  Py_XDECREF(iter_sections);
-  Py_XDECREF(nocopy);
   return toret;
+}
+
+PyDataBlock * datablock_copy(PyDataBlock *self, PyObject *args, PyObject *kwds)
+{
+  PyObject *nocopy = NULL;
+  static char *kwlist[] = {"nocopy", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist, &nocopy)) return NULL;
+  return PyDataBlock_Copy(self, nocopy);
 }
 
 
@@ -543,7 +542,7 @@ int PyDataBlock_SetMapping(PyDataBlock *self, PyObject *mapping)
     if (PyBlockMapping_Update(mapping_,mapping) != 0) goto except;
   }
   else {
-    PyErr_SetString(PyExc_TypeError,"Provided mapping must be either Mapping or dict.");
+    PyErr_SetString(PyExc_TypeError,"Provided mapping must be either BlockMapping or dict.");
     goto except;
   }
   Py_CLEAR(self->mapping);
@@ -563,14 +562,14 @@ static PyObject * datablock_set_mapping(PyDataBlock *self, PyObject *mapping)
 }
 
 
-static PyObject * datablock_data_getter(PyDataBlock* self, void * closure) {
+static PyObject * datablock_data_getter(PyDataBlock *self, void *closure) {
   PyObject * toret = (PyObject *) self->data;
   Py_XINCREF(toret);
   return toret;
 }
 
 
-static PyObject * datablock_mapping_getter(PyDataBlock* self, void * closure) {
+static PyObject * datablock_mapping_getter(PyDataBlock *self, void *closure) {
   PyObject * toret = (PyObject *) self->mapping;
   Py_XINCREF(toret);
   return toret;
@@ -585,7 +584,7 @@ Py_ssize_t PyDataBlock_Size(PyDataBlock *self)
 
 PyObject * PyDataBlock_Repr(PyDataBlock *self)
 {
-  return PyUnicode_FromFormat("DataBlock %S with mapping %S", (PyObject *) self->data, (PyObject *) self->mapping);
+  return PyUnicode_FromFormat("DataBlock %S with BlockMapping %S", (PyObject *) self->data, (PyObject *) self->mapping);
 }
 
 static int datablock_init(PyDataBlock *self, PyObject *args, PyObject *kwds)
@@ -602,14 +601,12 @@ static int datablock_init(PyDataBlock *self, PyObject *args, PyObject *kwds)
       Py_INCREF(data_);
       Py_CLEAR(self->data);
       self->data = data_;
-    }
-    if (PyDataBlock_Check(data)) {
       PyBlockMapping *mapping_ = ((PyDataBlock *) data)->mapping;
       Py_INCREF(mapping_);
       Py_CLEAR(self->mapping);
       self->mapping = mapping_;
     }
-    else if (PyDataBlock_Update(self, data) != 0) goto except;
+    else if (PyDataBlock_Update(self, data, NULL) != 0) goto except;
   }
   if ((mapping != NULL) & (mapping != Py_None)) {
     if (PyDataBlock_SetMapping(self, mapping) != 0) goto except;
@@ -655,14 +652,14 @@ static PyMemberDef PyDataBlock_members[] = {
 
 static PyMethodDef PyDataBlock_methods[] = {
   {"sections", (PyCFunction) PyDataBlock_Sections, METH_NOARGS, "Return sections"},
-  {"keys", (PyCFunction) PyDataBlock_Keys, METH_VARARGS | METH_KEYWORDS, "Return keys"},
-  {"items", (PyCFunction) PyDataBlock_Items, METH_VARARGS | METH_KEYWORDS, "Return items"},
-  {"get", (PyCFunction) PyDataBlock_Get, METH_VARARGS | METH_KEYWORDS, "Return item"},
+  {"keys", (PyCFunction) datablock_keys, METH_VARARGS | METH_KEYWORDS, "Return keys"},
+  {"items", (PyCFunction) datablock_items, METH_VARARGS | METH_KEYWORDS, "Return items"},
+  {"get", (PyCFunction) datablock_get, METH_VARARGS | METH_KEYWORDS, "Return item"},
   {"has", (PyCFunction) datablock_has, METH_VARARGS | METH_KEYWORDS, "Has item"},
-  {"set", (PyCFunction) PyDataBlock_Set, METH_VARARGS, "Set item"},
+  {"set", (PyCFunction) datablock_set, METH_VARARGS, "Set item"},
   {"set_mapping", (PyCFunction) datablock_set_mapping, METH_O, "Set item"},
-  {"update", (PyCFunction) datablock_update, METH_O, "Update DataBlock"},
-  {"copy", (PyCFunction) PyDataBlock_Copy, METH_VARARGS | METH_KEYWORDS, "Copy DataBlock"},
+  {"update", (PyCFunction) datablock_update, METH_VARARGS | METH_KEYWORDS, "Update DataBlock"},
+  {"copy", (PyCFunction) datablock_copy, METH_VARARGS | METH_KEYWORDS, "Copy DataBlock"},
   {"clear", (PyCFunction) datablock_clear, METH_VARARGS | METH_KEYWORDS, "Clear DataBlock"},
   {"__getitem__", (PyCFunction) PyDataBlock_GetItem, METH_O | METH_COEXIST, "x.__getitem__(y) <==> x[y]"},
   {NULL}  /* Sentinel */

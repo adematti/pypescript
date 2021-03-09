@@ -11,7 +11,6 @@ from .utils import BaseClass
 from .block import BlockMapping, DataBlock, SectionBlock
 from . import section_names
 from .config import ConfigBlock
-from .parameter import ParamBlock
 
 
 def _import_pygraphviz():
@@ -40,7 +39,7 @@ class BaseModule(BaseClass):
     data_block : DataBlock
         Structure containing data exchanged between modules.
     """
-    _reserved_option_names = ['module_name','module_class','common_parameters','specific_parameters','datablock_mapping','datablock_copy']
+    #_reserved_option_names = ['module_name','module_class','datablock_mapping','datablock_copy']
     logger = logging.getLogger('BaseModule')
 
     def __init__(self, name, options=None, config_block=None, data_block=None):
@@ -65,7 +64,6 @@ class BaseModule(BaseClass):
         self.name = name
         self.logger.info('Init module {}.'.format(self))
         self.set_config_block(options=options,config_block=config_block)
-        self.set_parameters()
         self.set_data_block(data_block=data_block)
 
     def set_config_block(self, options=None, config_block=None):
@@ -85,6 +83,8 @@ class BaseModule(BaseClass):
             for name,value in options.items():
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
+        self._datablock_mapping = BlockMapping(self.options.get_dict('datablock_mapping',None),sep='.')
+        self._datablock_copy = BlockMapping(self.options.get_dict('datablock_copy',None),sep='.')
 
     def set_data_block(self, data_block=None):
         """
@@ -97,24 +97,7 @@ class BaseModule(BaseClass):
             If ``None``, creates one.
         """
         self.data_block = DataBlock(data_block)
-        for param in self.parameters:
-            self.data_block[section_names.parameters,param.name] = param.value # no mapping here
-        self.data_block.set_mapping(self._mapping)
-
-    def set_parameters(self):
-        """
-        Set :attr:`parameters`.
-        """
-        self.parameters = ParamBlock(self.options.get_string('common_parameters',None))
-        mapping = {}
-        specific = ParamBlock(self.options.get_string('specific_parameters',None))
-        for param in specific:
-            param.add_suffix(self.name)
-            mapping[section_names.parameters,param] = (section_names.parameters,param.name)
-        self.parameters.update(specific)
-        self._mapping = BlockMapping(self.options.get_dict('datablock_mapping',None),sep='.')
-        self._mapping.update(mapping)
-        self._copy = BlockMapping(self.options.get_dict('datablock_copy',None),sep='.')
+        self.data_block.set_mapping(self._datablock_mapping)
 
     def setup(self):
         """Set up module (called at the beginning)."""
@@ -142,8 +125,8 @@ class BaseModule(BaseClass):
                 except Exception as exc:
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
 
-                if name != 'cleanup':
-                    for keyg,keyl in self._copy.items():
+                for keyg,keyl in self._datablock_copy.items():
+                    if keyg in self.data_block:
                         self.data_block[keyl] = self.data_block[keyg]
 
             return wrapper
@@ -158,6 +141,19 @@ class BaseModule(BaseClass):
     def from_filename(cls, name, options=None, config_block=None, data_block=None):
         """
         Create :class:`BaseModule`-type module from either module name or module file.
+        The imported module can contain the following functions:
+
+        - setup(name, config_block, data_block)
+        - execute(name, config_block, data_block)
+        - cleanup(name, config_block, data_block)
+
+        Or a class with the following methods:
+
+        - setup(self)
+        - execute(self)
+        - cleanup(self)
+
+        which can use attributes :attr:`name`, :attr:`config_block` and :attr:`data_block`.
 
         Parameters
         ----------
@@ -167,7 +163,7 @@ class BaseModule(BaseClass):
         options : SectionBlock, dict, default=None
             Options for this module.
             It should contain an entry 'module_file' OR (exclusive) 'module_name' (w.r.t. 'base_dir', defaulting to '.').
-            It may contain an entry 'module_class' containing a class name if the module consists in a class that extends :class:`BaseModule`.
+            It may contain an entry 'module_class' containing a class name if the module consists in a class.
 
         config_block : DataBlock, dict, string, default=None
             Structure containing configuration options.
@@ -187,42 +183,46 @@ class BaseModule(BaseClass):
             if module_name is not None:
                 raise ImportError('Failed importing module [{}]. Both module file and module name are provided!'.format(name))
             filename = os.path.join(base_dir,module_file)
-            cls.logger.info('Importing library {} for module [{}].'.format(filename,name))
+            cls.logger.info('Importing module {} [{}].'.format(filename,name))
             basename = os.path.basename(filename)
-            impname = os.path.splitext(basename)[0]
-            spec = importlib.util.spec_from_file_location(impname,filename)
-            library = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(library)
+            name_mod = os.path.splitext(basename)[0]
+            spec = importlib.util.spec_from_file_location(name_mod,filename)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
         else:
-            cls.logger.info('Importing module {} for module [{}].'.format(module_name,name))
-            library = importlib.import_module(module_name)
-            impname = module_name.split('.')[-1]
-
-        if module_class is not None:
-            if hasattr(library,module_class):
-                lib_cls = getattr(library,module_class)
-                if issubclass(lib_cls,BaseModule):
-                    return lib_cls(name,options=options,config_block=config_block,data_block=data_block)
-
-        clsname = utils.snake_to_pascal_case(impname)
-        lib_cls = type(clsname,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
+            cls.logger.info('Importing module {} [{}].'.format(module_name,name))
+            module = importlib.import_module(module_name)
+            name_mod = module_name.split('.')[-1]
 
         steps = ['setup','execute','cleanup']
 
-        def _make_func(library,step):
-            fname = options.get('{}_function'.format(step),step)
-            flib = getattr(library,fname,None)
+        if module_class is not None:
+            if hasattr(module,module_class):
+                mod_cls = getattr(module,module_class)
+                if issubclass(mod_cls,cls):
+                    return mod_cls(name,options=options,config_block=config_block,data_block=data_block)
+                else:
+                    new_cls = type(mod_cls.__name__,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
+                    for step in steps:
+                        setattr(new_cls,step,getattr(mod_cls,step))
+                    return new_cls(name,options=options,config_block=config_block,data_block=data_block)
+
+        name_cls = utils.snake_to_pascal_case(name_mod)
+        new_cls = type(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
+
+        def _make_func(module,step):
+            name_func = options.get('{}_function'.format(step),step)
+            mod_func = getattr(module,name_func)
 
             def func(self):
-                return flib(name,self.config_block,self.data_block)
+                return mod_func(name,self.config_block,self.data_block)
 
             return func
 
         for step in steps:
-            setattr(lib_cls,step,_make_func(library,step))
+            setattr(new_cls,step,_make_func(module,step))
 
-        return lib_cls(name,options=options,config_block=config_block,data_block=data_block)
-
+        return new_cls(name,options=options,config_block=config_block,data_block=data_block)
 
     @classmethod
     def plot_inheritance_graph(cls, filename, exclude=None):
@@ -270,7 +270,7 @@ class BasePipeline(BaseModule):
     modules : list
         List of modules.
     """
-    _reserved_option_names = BaseModule._reserved_option_names + ['modules']
+    #_reserved_option_names = BaseModule._reserved_option_names + ['modules']
     logger = logging.getLogger('BasePipeline')
 
     def __init__(self, name='main', options=None, config_block=None, data_block=None, modules=None):
@@ -300,7 +300,6 @@ class BasePipeline(BaseModule):
         super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block)
         # modules will automatically inherit config_block, pipe_block, no need to reset set_config_block() and set_data_block()
         self.modules += self._get_modules_from_filename(self.options.get_list('modules',default=[]))
-        self.set_parameters()
 
     def set_config_block(self, options=None, config_block=None):
         """
@@ -316,11 +315,12 @@ class BasePipeline(BaseModule):
             Structure containing configuration options, which will be updated with ``options``.
         """
         super(BasePipeline,self).set_config_block(options=options,config_block=config_block)
-        for module in self:
+        for module in self.modules:
             self.config_block.update(module.config_block)
-        for module in self:
+        for module in self.modules:
             module.set_config_block(config_block=self.config_block)
         self.options = SectionBlock(self.config_block,self.name)
+        self._datablock_share = BlockMapping(self.options.get_dict('datablock_share',None),sep='.')
 
     def set_data_block(self, data_block=None):
         """
@@ -336,14 +336,8 @@ class BasePipeline(BaseModule):
         """
         super(BasePipeline,self).set_data_block(data_block=data_block)
         self.pipe_block = self.data_block.copy() # shallow copy
-        for module in self:
+        for module in self.modules:
             module.set_data_block(self.pipe_block)
-
-    def set_parameters(self):
-        super(BasePipeline,self).set_parameters()
-        for module in self:
-            self.parameters.update(module.parameters)
-            module.parameters = self.parameters
 
     def _get_modules_from_filename(self, names):
         """Convenient method to load modules for module names."""
@@ -353,33 +347,71 @@ class BasePipeline(BaseModule):
             modules.append(module)
         return modules
 
-    def __iter__(self):
-        """Iterate over :attr:`modules`."""
-        yield from self.modules
+    def yield_setup(self, modules=None):
+        """Yield :attr:`modules` after calling :meth:`~BaseModule.setup`."""
+        if modules is None:
+            modules = self.modules
+        self.pipe_block = self.data_block.copy()
+        for module in modules:
+            module.set_data_block(self.pipe_block)
+            module.setup()
+            yield module
+
+    def yield_execute(self, modules=None):
+        """Yield :attr:`modules` after calling :meth:`~BaseModule.execute`."""
+        if modules is None:
+            modules = self.modules
+        self.pipe_block = self.data_block.copy()
+        for module in modules:
+            module.set_data_block(self.pipe_block)
+            module.execute()
+            yield module
+
+    def yield_cleanup(self, modules=None):
+        """Yield :attr:`modules` after calling :meth:`~BaseModule.cleanup`."""
+        if modules is None:
+            modules = self.modules
+        for module in modules:
+            module.cleanup()
+            yield module
 
     def setup(self):
         """Set up :attr:`modules`."""
-        for module in self:
-            module.setup()
-        return 0
+        for module in self.yield_setup():
+            pass
 
     def execute(self):
         """Execute :attr:`modules`."""
-        for module in self:
-            module.execute()
-        return 0
-
-    def execute_parameter_values(self, **kwargs):
-        for name,value in kwargs.items():
-            self.pipe_block[section_names.parameters,name] = value
-        self.execute()
+        for module in self.yield_execute():
+            pass
 
     def cleanup(self):
         """Clean up :attr:`modules`."""
-        for module in self:
-            module.cleanup()
-        del self.pipe_block
-        return 0
+        for module in self.yield_cleanup():
+            pass
+
+    def __getattribute__(self, name):
+        """
+        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
+        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
+        """
+        if name in ['setup','execute','cleanup']:
+            fun = super(BaseModule,self).__getattribute__(name)
+
+            def wrapper(*args,**kwargs):
+                try:
+                    fun(*args,**kwargs)
+                except Exception as exc:
+                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
+
+                for keyg,keyl in self._datablock_copy.items():
+                    if keyg in self.pipe_block:
+                        self.data_block[keyl] = self.pipe_block[keyg]
+
+            return wrapper
+
+        return super(BaseModule,self).__getattribute__(name)
+
 
     def plot_pipeline_graph(self, filename):
         """Plot pipeline as a graph to ``filename``."""

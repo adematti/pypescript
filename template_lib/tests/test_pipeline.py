@@ -2,9 +2,10 @@ import os
 import yaml
 import pytest
 
-from pypescript import BaseModule, BasePipeline, ConfigBlock, SectionBlock, section_names, setup_logging
+from pypescript import BaseModule, BasePipeline, ConfigBlock, SectionBlock, setup_logging
 from template_lib.model import FlatModel
 from template_lib.likelihood import BaseLikelihood, JointGaussianLikelihood
+from template_lib import section_names
 
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -64,9 +65,11 @@ def test_demo3():
         pipeline = BasePipeline(config_block=config_fn)
         pipeline.plot_pipeline_graph(graph_fn)
         pipeline.setup()
-        pipeline.execute_parameter_values(a=0.)
+        pipeline.data_block[section_names.parameters,'a'] = 0.
+        pipeline.execute()
         loglkl = pipeline.data_block[section_names.likelihood,'loglkl']
-        pipeline.execute_parameter_values(a=4.)
+        pipeline.data_block[section_names.parameters,'a'] = 4.
+        pipeline.execute()
         assert pipeline.data_block[section_names.likelihood,'loglkl'] != loglkl
         pipeline.cleanup()
 
@@ -100,23 +103,9 @@ def test_demo3b():
 def test_demo4():
 
     config_fn = os.path.join(demo_dir,'demo4.yaml')
-    graph_fn = os.path.join(demo_dir,'pipe4.ps')
-
     pipeline = BasePipeline(config_block=config_fn)
-    pipeline.plot_pipeline_graph(graph_fn)
     pipeline.setup()
-    pipeline.data_block[section_names.parameters,'a'] = 0.
-    del pipeline.data_block[section_names.parameters,'a_model1']
-    del pipeline.data_block[section_names.parameters,'b_model1']
-    with pytest.raises(RuntimeError):
-        pipeline.execute()
-    pipeline.data_block[section_names.parameters,'a_model1'] = 0.
-    with pytest.raises(RuntimeError):
-        pipeline.execute()
-    pipeline.data_block[section_names.parameters,'b_model1'] = 0.
-    assert (section_names.common,'y_data1') in pipeline.data_block
-    assert (section_names.common,'y_data2') not in pipeline.data_block
-    pipeline.cleanup()
+    assert pipeline.pipe_block[section_names.data,'ysave'].size == 3
 
 
 if __name__ == '__main__':

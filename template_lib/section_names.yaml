@@ -4,4 +4,4 @@
 - likelihood
 - common
 - parameters
-- nocopy: [parameters, likelihood, common]
+- nocopy: [likelihood, common]

@@ -1,8 +1,8 @@
 import logging
 
 import numpy as np
-
 from pypescript import BaseModule
+
 from template_lib import section_names
 
 

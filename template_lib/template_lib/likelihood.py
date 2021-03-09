@@ -1,8 +1,8 @@
 import logging
 
 import numpy as np
-
 from pypescript import BasePipeline
+
 from template_lib import section_names
 
 
@@ -59,7 +59,7 @@ class SumLikelihood(BaseLikelihood):
 
     def execute(self):
         loglkl = 0
-        for module in self:
+        for module in self.modules:
             module.execute()
             loglkl += self.pipe_block[section_names.likelihood,'loglkl']
         self.data_block[section_names.likelihood,'loglkl'] = loglkl
@@ -80,14 +80,14 @@ class JointGaussianLikelihood(GaussianLikelihood):
 
     def setup(self):
         join = {}
-        for module in self.join:
-            module.setup()
+        for module in self.yield_setup(self.join):
             for key in self.pipe_block.keys(section=section_names.data):
                 if key not in join: join[key] = []
                 join[key].append(self.pipe_block[key])
         for key in join:
             self.data_block[key] = self.pipe_block[key] = np.concatenate(join[key])
         for module in self.after:
+            module.set_data_block(self.pipe_block)
             module.setup()
         self.set_data()
         self.set_covariance()
@@ -95,8 +95,7 @@ class JointGaussianLikelihood(GaussianLikelihood):
 
     def execute(self):
         join = {}
-        for module in self.join:
-            module.execute()
+        for module in self.yield_execute(self.join):
             for key in self.pipe_block.keys(section=section_names.model):
                 if key not in join: join[key] = []
                 join[key].append(self.pipe_block[key])
