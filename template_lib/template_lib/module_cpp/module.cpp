@@ -1,5 +1,6 @@
 #include <iostream>
 using namespace std;
+#include <mpi.h>
 #include "pypelib.h"
 #include "module.hpp"
 
@@ -37,8 +38,17 @@ int setup(const char * name, DataBlock *config_block, DataBlock *data_block) {
   long long_answer = 0;
   float float_answer = 0.;
   double double_answer = 0.;
-  // Setting a (default) value as last argument makes the provided pointer point to this value if no value is found in config_block
-  // This uses a va_list, the default value should be of the correct type!
+
+  MPI_Comm comm;
+  if (DataBlock_get_mpi_comm_default(data_block, MPI_SECTION, "comm", &comm, MPI_COMM_WORLD) < 0) return -1;
+  int rank, size;
+  char pname[MPI_MAX_PROCESSOR_NAME]; int len;
+  MPI_Comm_size(comm, &size);
+  MPI_Comm_rank(comm, &rank);
+  MPI_Get_processor_name(pname, &len);
+  pname[len] = 0;
+  status = log_info(MODULE_NAME, "Hello, world! I am process %d of %d on %s.", rank, size, pname);
+
   if (DataBlock_get_int_default(config_block, name, "answer", &answer, ANSWER) < 0) return -1;
   if (answer != ANSWER) return -1;
   if (DataBlock_get_long_default(config_block, name, "answer", &long_answer, ANSWER) < 0) return -1;

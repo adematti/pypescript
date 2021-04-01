@@ -19,5 +19,5 @@ setup(name='pypescript',
     packages=['pypescript','pypescript.setuppype'],
     ext_modules=[extension],
     package_data={base_dir: ['wrappers/*','block/*']},
-    entry_points={'console_scripts': ['pypescript=pypescript.__main__:main']}
+    entry_points={'console_scripts': ['pypescript=pypescript.__main__:main','pypescript_section_names=pypescript.setuppype.generate_section_names:main']}
     )

@@ -5,9 +5,11 @@ import logging
 
 import numpy as np
 
+from . import utils
 from .utils import BaseClass
 from . import section_names
 from .lib import block
+from .mpi import CurrentMPIComm
 
 
 class BlockMapping(block.BlockMapping,BaseClass):
@@ -55,8 +57,8 @@ class BlockMapping(block.BlockMapping,BaseClass):
         for key,value in data.items():
             if not ((isinstance(key,str) and isinstance(value,str)) or (isinstance(key,tuple) and isinstance(value,tuple))):
                 raise TypeError('In mapping {} = {}, both terms should be either string or tuple'.format(key,value))
-            if sep is not None and isinstance(key,str):
-                key,value = (tuple(section_name.strip().split(sep)) for section_name in [key,value])
+            if sep is not None:
+                key,value = (utils.split_section_name(section_name) for section_name in [key,value])
             if isinstance(key,tuple):
                 if not (len(key) == len(value) <= 2):
                     raise TypeError('In mapping {} = {}, both terms should be same size (1 or 2)'.format(key,value))
@@ -73,6 +75,15 @@ class BlockMapping(block.BlockMapping,BaseClass):
         """Set the class state dictionary."""
         return self.__init__(data=state['data'])
 
+    def __iter__(self):
+        """Iter. TODO: implement in C."""
+        return iter(self.keys())
+
+    def setdefault(self, key, value):
+        """Iter. TODO: implement in C."""
+        if key not in self:
+            self[key] = value
+
 
 class DataBlock(block.DataBlock,BaseClass):
     """
@@ -83,6 +94,12 @@ class DataBlock(block.DataBlock,BaseClass):
     The class mostly inherits from the DataBlock type coded using the Python C API.
     Only a few convenience methods are written in Python below.
 
+    >>> data_block = DataBlock({'section1':{'name1':1}})
+    >>> data_block.get('section1','name1')
+    >>> data_block.get_int('section1','name1')
+    >>> data_block.get_string('section1','name1')
+    Traceback (most recent call last): pypescript.block.TypeError: Wrong type for "name1" in section [section1].
+
     Attributes
     ----------
     data : dict
@@ -91,15 +108,6 @@ class DataBlock(block.DataBlock,BaseClass):
     mapping : BlockMapping
         See documentation of :class:`BlockMapping`.
 
-    >>> data_block = DataBlock({'section1':{'name1':1}})
-    >>> data_block.get('section1','name1')
-    1
-    >>> data_block.get_int('section1','name1')
-    1
-    >>> data_block.get_string('section1','name1')
-    Traceback (most recent call last):
-        ...
-    pypescript.block.TypeError: Wrong type for "name1" in section [section1].
     """
     logger = logging.getLogger('DataBlock')
 
@@ -126,6 +134,7 @@ class DataBlock(block.DataBlock,BaseClass):
             add_sections = section_names.nocopy
         for section in add_sections:
             if section not in self: self[section] = {}
+        self.setdefault(section_names.mpi,'comm',CurrentMPIComm.get())
 
     def get_type(self, section, name, type_, *args, **kwargs):
         """
@@ -254,6 +263,14 @@ class DataBlock(block.DataBlock,BaseClass):
         """Set the class state dictionary."""
         super(DataBlock,self).__init__(data=state['data'],mapping=BlockMapping.from_state(state['mapping']))
 
+    def __iter__(self, **kwargs):
+        """Iter. TODO: implement in C."""
+        return iter(self.keys(**kwargs))
+
+    def setdefault(self, section, name, value):
+        """Iter. TODO: implement in C."""
+        if (section,name) not in self:
+            self.set(section,name,value)
 
 def _make_getter(type_):
 
@@ -292,9 +309,9 @@ class SectionBlock(object):
         self.block = block
         self.section = section
 
-    def __repr__(self):
-        """Class representation as a dictionary."""
-        return repr(self.block[self.section])
+    def __str__(self):
+        """Class string as a dictionary."""
+        return str(self.block[self.section])
 
     def items(self):
         """Yield (name, value) tuples."""
@@ -311,6 +328,10 @@ class SectionBlock(object):
     def __setitem__(self, key, value):
         """Set item."""
         self.block[self.section,key] = value
+
+    def __contains__(self, name):
+        """Contains this ``name``?"""
+        return self.has(name)
 
     def keys(self):
         """Return names in the :attr:``block`` section."""

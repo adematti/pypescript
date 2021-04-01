@@ -5,7 +5,7 @@ Building
 
 Requirements
 ------------
-**pypescript** requires *pyyaml* and *numpy*.
+**pypescript** requires *pyyaml*, *numpy* and *mpi4py*.
 
 
 PIP

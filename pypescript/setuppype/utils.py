@@ -87,7 +87,7 @@ def walk_pype_modules(base_dir='.', include_pype_module_names=None, exclude_pype
             with open(description_file, 'r') as file:
                 description = yaml.load(file, Loader=yaml.FullLoader)
             if not check_module_description(description,description_file):
-                return
+                continue
             full_name = get_module_full_name(os.path.join(module_dir,description['name']), base_dir=base_dir)
             if include_pype_module_names is not None:
                 toinclude = False

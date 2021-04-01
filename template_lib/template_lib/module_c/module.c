@@ -1,6 +1,7 @@
 #include "math.h"
 #include "stdlib.h"
 #include "stdio.h"
+#include <mpi.h>
 #include "pypelib.h"
 
 // Here we define stuff only useful for the tests performed in the module
@@ -38,6 +39,16 @@ int setup(const char * name, DataBlock *config_block, DataBlock *data_block) {
   long long_answer = 0;
   float float_answer = 0.;
   double double_answer = 0.;
+
+  MPI_Comm comm;
+  if (DataBlock_get_mpi_comm_default(data_block, MPI_SECTION, "comm", &comm, MPI_COMM_WORLD) < 0) goto except;
+  int rank, size;
+  char pname[MPI_MAX_PROCESSOR_NAME]; int len;
+  MPI_Comm_size(comm, &size);
+  MPI_Comm_rank(comm, &rank);
+  MPI_Get_processor_name(pname, &len);
+  pname[len] = 0;
+  status = log_info(MODULE_NAME, "Hello, world! I am process %d of %d on %s.", rank, size, pname);
 
   if (DataBlock_get_int_default(config_block, name, "answer", &answer, ANSWER) < 0) goto except;
   if (answer != ANSWER) goto except;

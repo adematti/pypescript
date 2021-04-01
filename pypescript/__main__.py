@@ -1,7 +1,9 @@
 """**pypescript** main entry point."""
 
+import datetime
 import argparse
 
+from ._version import __version__
 from .utils import setup_logging
 from .main import main as pypescript_main
 
@@ -13,14 +15,14 @@ ascii_art = """\
  | |_) | |_| | |_) |  __/\__ \ (__| |  | | |_) | |_
  | .__/ \__, | .__/ \___||___/\___|_|  |_| .__/ \__|
  | |     __/ | |                         | |
- |_|    |___/|_|                         |_|        \n"""
+ |_|    |___/|_|                         |_|        \n\n""" + \
+ """version: {}                     date: {}\n""".format(__version__,datetime.date.today())
 
 
 def main(args=None):
     print(ascii_art)
     parser = argparse.ArgumentParser(description=main.__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config-fn', type=str, required=True,
-                        help='Name of configuration file')
+    parser.add_argument('config_fn', type=str, help='Name of configuration file')
     parser.add_argument('--pipe-graph-fn', type=str, default=None,
                         help='If provided, save graph of the pipeline to this file name')
     opt = parser.parse_args(args=args)

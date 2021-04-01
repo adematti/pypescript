@@ -194,6 +194,8 @@ module pypescript_wrappers
     end function DataBlock_move_value_wrapper
 
     ! Scalar getters
+    GENERATE_GET_SCALAR_DEFAULT_WRAPPER(mpi_comm,integer(c_int),"DataBlock_get_mpi_comm_default")
+    GENERATE_GET_SCALAR_WRAPPER(mpi_comm,integer(c_int),"DataBlock_get_mpi_comm")
 
     GENERATE_GET_SCALAR_DEFAULT_WRAPPER(int,integer(c_int),"DataBlock_get_int_default")
     GENERATE_GET_SCALAR_WRAPPER(int,integer(c_int),"DataBlock_get_int")
@@ -352,6 +354,9 @@ module pypescript_block
   end function DataBlock_move_value
 
   ! Scalar getters
+
+  GENERATE_GET_SCALAR_DEFAULT(mpi_comm,integer(c_int))
+  GENERATE_GET_SCALAR(mpi_comm,integer(c_int))
 
   GENERATE_GET_SCALAR_DEFAULT(int,integer(c_int))
   GENERATE_GET_SCALAR(int,integer(c_int))

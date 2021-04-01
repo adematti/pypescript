@@ -14,6 +14,7 @@ from numpy.distutils.command.build_src import appendpath
 from numpy.distutils import log
 from numpy.distutils.core import setup as _setup
 from distutils.dep_util import newer_group
+import mpi4py
 
 from .generate_section_names import WriteSections
 from .generate_pymodule_csource import write_csource
@@ -67,9 +68,9 @@ class Extension(_Extension):
         self.is_pypemodule = description_file is not None
         if self.is_pypemodule:
             if self.has_fortran_sources():
-                self.extra_link_args = addfirst(self.extra_link_args,*('-l{}'.format(w) for w in pypelib_wrappers.values()))
+                self.extra_link_args = addfirst(self.extra_link_args,*('-l{}'.format(w) for w in pypelib_wrappers.values()),'-lmpifort')
             else:
-                self.extra_link_args = addfirst(self.extra_link_args,'-l{}'.format(pypelib_wrappers['c']))
+                self.extra_link_args = addfirst(self.extra_link_args,'-l{}'.format(pypelib_wrappers['c']),'-lmpi')
         self.use_f2py = self.has_fortran_sources() and kwargs.get('f2py_options',None) is not None
         for f90_flag in ['-ffree-line-length-none']:
             if f90_flag not in self.extra_f90_compile_args:
@@ -267,7 +268,7 @@ class setup(object):
             # if Python extensions, need to compile **pypescript** wrappers
             write_sections()
             pypelib_libraries = [(pypelib_wrappers['c'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.c')),
-                                                        'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include')]})]
+                                                        'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include()]})]
                                                         # Python include needed by pip, why?
             pypelib_libraries += [(pypelib_wrappers['fortran'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.F90')),
                                                         'extra_f90_compile_args':['-ffree-line-length-none']})]
@@ -322,7 +323,7 @@ class setup(object):
                         self.pypelib_block_dir = pkg_resources.resource_filename('pypescript','block')
                     compile_kwargs['sources'] = sum([glob.glob(os.path.abspath(os.path.join(module_dir,source))) for source in ext_sources],[])
                     compile_kwargs['include_dirs'] = addfirst(compile_kwargs.get('include_dirs',[]),
-                                                    self.pypelib_wrappers_dir,self.pypelib_block_dir,self.section_dir)
+                                                    self.pypelib_wrappers_dir,self.pypelib_block_dir,self.section_dir,mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR'))
                     extension = Extension(full_name, module_dir=module_dir, doc=description.get('description',''),
                                             description_file=description_file, **compile_kwargs)
                     extensions.append(extension)

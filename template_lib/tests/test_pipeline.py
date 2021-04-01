@@ -2,7 +2,8 @@ import os
 import yaml
 import pytest
 
-from pypescript import BaseModule, BasePipeline, ConfigBlock, SectionBlock, setup_logging
+from pypescript import BaseModule, BasePipeline, ConfigBlock, SectionBlock
+from pypescript.utils import setup_logging, MemoryMonitor
 from template_lib.model import FlatModel
 from template_lib.likelihood import BaseLikelihood, JointGaussianLikelihood
 from template_lib import section_names
@@ -23,10 +24,10 @@ def test_demo1():
     pipeline.setup()
     pipeline.data_block[section_names.parameters,'a'] = 0.
     pipeline.execute()
-    loglkl = pipeline.data_block[section_names.likelihood,'loglkl']
+    loglkl = pipeline.pipe_block[section_names.likelihood,'loglkl']
     pipeline.data_block[section_names.parameters,'a'] = 4.
     pipeline.execute()
-    assert pipeline.data_block[section_names.likelihood,'loglkl'] != loglkl
+    assert pipeline.pipe_block[section_names.likelihood,'loglkl'] != loglkl
     pipeline.cleanup()
 
     graph_fn = os.path.join(demo_dir,'inheritance.ps')
@@ -43,10 +44,10 @@ def test_demo2():
     pipeline.setup()
     pipeline.data_block[section_names.parameters,'a'] = 0.
     pipeline.execute()
-    loglkl = pipeline.data_block[section_names.likelihood,'loglkl']
+    loglkl = pipeline.pipe_block[section_names.likelihood,'loglkl']
     pipeline.data_block[section_names.parameters,'a'] = 4.
     pipeline.execute()
-    assert pipeline.data_block[section_names.likelihood,'loglkl'] != loglkl
+    assert pipeline.pipe_block[section_names.likelihood,'loglkl'] != loglkl
     pipeline.cleanup()
 
 
@@ -58,7 +59,7 @@ def test_demo3():
     with open(config_fnb,'w') as file:
         yaml.dump(config.data, file)
 
-    for config_fn in [config_fn,config_fnb]:
+    for config_fn in [config_fn,config_fnb][:1]:
 
         graph_fn = os.path.join(demo_dir,'pipe3.ps')
 
@@ -67,10 +68,10 @@ def test_demo3():
         pipeline.setup()
         pipeline.data_block[section_names.parameters,'a'] = 0.
         pipeline.execute()
-        loglkl = pipeline.data_block[section_names.likelihood,'loglkl']
+        loglkl = pipeline.pipe_block[section_names.likelihood,'loglkl']
         pipeline.data_block[section_names.parameters,'a'] = 4.
         pipeline.execute()
-        assert pipeline.data_block[section_names.likelihood,'loglkl'] != loglkl
+        assert pipeline.pipe_block[section_names.likelihood,'loglkl'] != loglkl
         pipeline.cleanup()
 
 
@@ -93,10 +94,10 @@ def test_demo3b():
     pipeline.setup()
     pipeline.data_block[section_names.parameters,'a'] = 0.
     pipeline.execute()
-    loglkl = pipeline.data_block[section_names.likelihood,'loglkl']
+    loglkl = pipeline.pipe_block[section_names.likelihood,'loglkl']
     pipeline.data_block[section_names.parameters,'a'] = 4.
     pipeline.execute()
-    assert pipeline.data_block[section_names.likelihood,'loglkl'] != loglkl
+    assert pipeline.pipe_block[section_names.likelihood,'loglkl'] != loglkl
     pipeline.cleanup()
 
 
@@ -111,8 +112,10 @@ def test_demo4():
 if __name__ == '__main__':
 
     setup_logging()
-    test_demo1()
-    test_demo2()
-    test_demo3()
-    test_demo3b()
-    test_demo4()
+    with MemoryMonitor() as mem:
+        for i in range(10):
+            test_demo1()
+            test_demo2()
+            test_demo3()
+            test_demo3b()
+            test_demo4()

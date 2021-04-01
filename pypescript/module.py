@@ -7,7 +7,6 @@ import importlib
 import ctypes
 
 from . import utils
-from .utils import BaseClass
 from .block import BlockMapping, DataBlock, SectionBlock
 from . import section_names
 from .config import ConfigBlock
@@ -21,7 +20,10 @@ def _import_pygraphviz():
     return pgv
 
 
-class BaseModule(BaseClass):
+#_all_loaded_modules = {}
+
+@utils.addclslogger
+class BaseModule(object):
     """
     Base module class, which wraps pure Python modules or Python C extensions.
     Modules interact with the rest of the pipeline through the three methods :meth:`BaseModule.setup`, :meth:`BaseModule.execute`
@@ -39,7 +41,7 @@ class BaseModule(BaseClass):
     data_block : DataBlock
         Structure containing data exchanged between modules.
     """
-    #_reserved_option_names = ['module_name','module_class','datablock_mapping','datablock_copy']
+    _reserved_option_names = ['module_name','module_file','module_class','datablock_mapping','datablock_copy']
     logger = logging.getLogger('BaseModule')
 
     def __init__(self, name, options=None, config_block=None, data_block=None):
@@ -62,7 +64,7 @@ class BaseModule(BaseClass):
             Structure containing data exchanged between modules. If ``None``, creates one.
         """
         self.name = name
-        self.logger.info('Init module {}.'.format(self))
+        self.log_info('Init module {}.'.format(self),rank=0)
         self.set_config_block(options=options,config_block=config_block)
         self.set_data_block(data_block=data_block)
 
@@ -99,6 +101,10 @@ class BaseModule(BaseClass):
         self.data_block = DataBlock(data_block)
         self.data_block.set_mapping(self._datablock_mapping)
 
+    @property
+    def mpicomm(self):
+        return self.data_block[section_names.mpi,'comm']
+
     def setup(self):
         """Set up module (called at the beginning)."""
         raise NotImplementedError
@@ -117,7 +123,7 @@ class BaseModule(BaseClass):
         :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
         """
         if name in ['setup','execute','cleanup']:
-            fun = super(BaseModule,self).__getattribute__(name)
+            fun = object.__getattribute__(self,name)
 
             def wrapper(*args,**kwargs):
                 try:
@@ -131,10 +137,10 @@ class BaseModule(BaseClass):
 
             return wrapper
 
-        return super(BaseModule,self).__getattribute__(name)
+        return object.__getattribute__(self,name)
 
-    def __repr__(self):
-        """Representation as module class name + module local name (in this pipeline)."""
+    def __str__(self):
+        """String as module class name + module local name (in this pipeline)."""
         return '{} [{}]'.format(self.__class__.__name__,self.name)
 
     @classmethod
@@ -171,6 +177,8 @@ class BaseModule(BaseClass):
         data_block : DataBlock, default=None
             Structure containing data exchanged between modules. If ``None``, creates one.
         """
+        #if name in _all_loaded_modules:
+        #    raise SyntaxError('You should NOT use the same module name in different pipelines. Create a new module, and use configblock_copy if useful!')
         options = options or {}
         base_dir = options.get('base_dir','.')
         module_file = options.get('module_file',None)
@@ -183,46 +191,59 @@ class BaseModule(BaseClass):
             if module_name is not None:
                 raise ImportError('Failed importing module [{}]. Both module file and module name are provided!'.format(name))
             filename = os.path.join(base_dir,module_file)
-            cls.logger.info('Importing module {} [{}].'.format(filename,name))
+            cls.log_info('Importing module {} [{}].'.format(filename,name),rank=0)
             basename = os.path.basename(filename)
             name_mod = os.path.splitext(basename)[0]
             spec = importlib.util.spec_from_file_location(name_mod,filename)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         else:
-            cls.logger.info('Importing module {} [{}].'.format(module_name,name))
+            cls.log_info('Importing module {} [{}].'.format(module_name,name),rank=0)
             module = importlib.import_module(module_name)
             name_mod = module_name.split('.')[-1]
 
         steps = ['setup','execute','cleanup']
 
+        def get_func_name(step):
+            return options.get('{}_function'.format(step),step)
+
+        if module_class is None:
+            name_cls = utils.snake_to_pascal_case(name_mod)
+            if all(hasattr(module,get_func_name(step)) for step in steps):
+                new_cls = type(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
+
+                def _make_func(module,step):
+                    mod_func = getattr(module,get_func_name(step))
+
+                    def func(self):
+                        return mod_func(name,self.config_block,self.data_block)
+
+                    return func
+
+                for step in steps:
+                    setattr(new_cls,step,_make_func(module,step))
+                return new_cls(name,options=options,config_block=config_block,data_block=data_block)
+                #_all_loaded_modules[name] = toret
+                #return toret
+            else:
+                cls.log_info('No setup, execute and cleanup functions found in module [{}], trying to load class {}.'.format(name,name_cls),rank=0)
+                module_class = name_cls
+
         if module_class is not None:
             if hasattr(module,module_class):
                 mod_cls = getattr(module,module_class)
                 if issubclass(mod_cls,cls):
-                    return mod_cls(name,options=options,config_block=config_block,data_block=data_block)
+                    toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block)
                 else:
-                    new_cls = type(mod_cls.__name__,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
+                    new_cls = type(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
                     for step in steps:
-                        setattr(new_cls,step,getattr(mod_cls,step))
-                    return new_cls(name,options=options,config_block=config_block,data_block=data_block)
+                        setattr(new_cls,step,getattr(mod_cls,get_func_name(step)))
+                    toret = new_cls(name,options=options,config_block=config_block,data_block=data_block)
+                #_all_loaded_modules[name] = toret
+                return toret
+            else:
+                raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,name_mod,name))
 
-        name_cls = utils.snake_to_pascal_case(name_mod)
-        new_cls = type(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
-
-        def _make_func(module,step):
-            name_func = options.get('{}_function'.format(step),step)
-            mod_func = getattr(module,name_func)
-
-            def func(self):
-                return mod_func(name,self.config_block,self.data_block)
-
-            return func
-
-        for step in steps:
-            setattr(new_cls,step,_make_func(module,step))
-
-        return new_cls(name,options=options,config_block=config_block,data_block=data_block)
 
     @classmethod
     def plot_inheritance_graph(cls, filename, exclude=None):
@@ -256,9 +277,27 @@ class BaseModule(BaseClass):
             callback(newcls,cls)
 
         graph.layout('dot')
-        cls.logger.info('Saving graph to {}.'.format(filename))
+        cls.log_info('Saving graph to {}.'.format(filename),rank=0)
         utils.mkdir(os.path.dirname(filename))
         graph.draw(filename)
+
+
+class ModuleTodo(object):
+
+    def __init__(self, pipeline, module, funcnames=None):
+        self.pipeline = pipeline
+        self.module = module
+        if isinstance(funcnames,str):
+            funcnames = [funcnames]
+        self.funcnames = funcnames or []
+        self.func = [getattr(module,funcname) for funcname in self.funcnames]
+
+    def __repr__(self):
+        return 'ModuleToDo(pipeline=[{}],module=[{}],funcnames={})'.format(self.pipeline.name,self.module.name,self.funcnames)
+
+    def __call__(self):
+        self.module.set_data_block(self.pipeline.pipe_block)
+        for func in self.func: func()
 
 
 class BasePipeline(BaseModule):
@@ -270,10 +309,10 @@ class BasePipeline(BaseModule):
     modules : list
         List of modules.
     """
-    #_reserved_option_names = BaseModule._reserved_option_names + ['modules']
+    _reserved_option_names = BaseModule._reserved_option_names + ['modules','setup','execute','cleanup']
     logger = logging.getLogger('BasePipeline')
 
-    def __init__(self, name='main', options=None, config_block=None, data_block=None, modules=None):
+    def __init__(self, name='main', options=None, config_block=None, data_block=None, modules=None, setup=None, execute=None, cleanup=None):
         """
         Initalise :class:`BasePipeline`.
 
@@ -294,101 +333,227 @@ class BasePipeline(BaseModule):
             Structure containing data exchanged between modules. If ``None``, creates one.
 
         modules : list, default=None
-            List of modules, which will be completed by those in 'modules' entry of options.
+            List of modules, which will be completed by those in 'setup', 'execute' and 'cleanup' entries of options.
         """
-        self.modules = modules or []
+        modules = modules or []
+        setup_todos = setup or []
+        execute_todos = execute or []
+        cleanup_todos = cleanup or []
+        self.modules = []
+        self._datablock_bcast = []
         super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block)
         # modules will automatically inherit config_block, pipe_block, no need to reset set_config_block() and set_data_block()
-        self.modules += self._get_modules_from_filename(self.options.get_list('modules',default=[]))
+        modules += self.options.get_list('modules',default=[])
+        setup_todos += self.options.get_list('setup',default=[])
+        execute_todos += self.options.get_list('execute',default=[])
+        cleanup_todos += self.options.get_list('cleanup',default=[])
+        self.pipe_block = self.data_block.copy()
+        self.set_todos(modules=modules,setup_todos=setup_todos,execute_todos=execute_todos,cleanup_todos=cleanup_todos)
+        self._iter = self.options.get('iter',None)
+        self.nprocs_per_task = self.options.get('nprocs_per_task',1)
+        if self._iter is not None and not isinstance(self._iter,list):
+            self._iter = eval(self._iter)
+        for block in ['configblock_iter','datablock_iter','datablock_iter_key']:
+            block_iter = {}
+            for key,value in self.options.get_dict(block,{}).items():
+                key = utils.split_section_name(key)
+                if len(key) != 2:
+                    raise ValueError('Incorrect {} key: {}.'.format(block,key))
+                if value is None:
+                    value = lambda i: i
+                #elif isinstance(value,list):
+                #    if not len(value) == len(self._iter):
+                #        raise ValueError('{} {} list must be of the same length as iter = {:d}.'.format(block,key,len(self._iter)))
+                #    value = lambda i: value[i]
+                else:
+                    value = eval(value)
+                    if not callable(value):
+                        raise TypeError('Incorrect {} value: {}.'.format(block,value))
+                        #value = lambda i: value[i]
+                block_iter[key] = value
+            setattr(self,'_{}'.format(block),block_iter)
+
+        if self._iter is not None:
+            for key in self._datablock_iter_key:
+                tmp = []
+                for i in self._iter:
+                    value = self._datablock_iter_key[key](i)
+                    value = utils.split_section_name(value)
+                    if value in self._datablock_bcast:
+                        raise ValueError('DataBlock key {} must appear only once for all iterations.'.format(value))
+                    tmp.append(value)
+                self._datablock_iter_key[key] = tmp
+                self._datablock_bcast += tmp
+        self.set_config_block(config_block=self.config_block)
 
     def set_config_block(self, options=None, config_block=None):
-        """
-        Set :attr:`config_block` and :attr:`options`.
-        It merges :attr:`config_block` of each module of the pipeline and update them with the merged version.
-
-        Parameters
-        ----------
-        options : SectionBlock, dict, default=None
-            Options for this module, which update those in ``config_block``.
-
-        config_block : DataBlock, dict, string, default=None
-            Structure containing configuration options, which will be updated with ``options``.
-        """
-        super(BasePipeline,self).set_config_block(options=options,config_block=config_block)
+        #super(BasePipeline,self).set_config_block(options=options,config_block=config_block)
+        self.config_block = ConfigBlock(config_block)
+        if options is not None:
+            for name,value in options.items():
+                self.config_block[self.name,name] = value
+        self.options = SectionBlock(self.config_block,self.name)
+        self._datablock_mapping = BlockMapping(self.options.get_dict('datablock_mapping',None),sep='.')
+        datablock_copy = self.options.get('datablock_copy',None)
+        if datablock_copy is not None:
+            if isinstance(datablock_copy,list):
+                datablock_copy = {key:key for key in datablock_copy}
+            datablock_copy = {key:value if value is not None else key for key,value in datablock_copy.items()}
+        self._datablock_copy = BlockMapping(datablock_copy,sep='.')
+        for key in self._datablock_bcast:
+            self._datablock_copy[key] = key
         for module in self.modules:
             self.config_block.update(module.config_block)
         for module in self.modules:
             module.set_config_block(config_block=self.config_block)
-        self.options = SectionBlock(self.config_block,self.name)
-        self._datablock_share = BlockMapping(self.options.get_dict('datablock_share',None),sep='.')
 
-    def set_data_block(self, data_block=None):
-        """
-        Set :attr:`data_block` and :attr:`pipe_block`, a local shallow copy of :attr:`data_block`.
-        It updates :attr:`data_block` of each module of the pipeline with :attr:`pipe_block`.
-        Hence, changes to :attr:`pipe_block` do not propage in the higher level part of the full pipeline.
+    def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
+        self.modules = [self.get_module_from_name(module) if isinstance(module,str) else module for module in modules]
+        setup_todos = setup_todos or []
+        execute_todos = execute_todos or []
+        cleanup_todos = cleanup_todos or []
+        modules_todo = {}
+        self.setup_todos = []
+        self.execute_todos = []
+        self.cleanup_todos = []
 
-        Parameters
-        ----------
-        data_block : DataBlock, default=None
-            :class:`DataBlock` instance used by the module to retrieve and store items.
-            If ``None``, creates one.
-        """
-        super(BasePipeline,self).set_data_block(data_block=data_block)
-        self.pipe_block = self.data_block.copy() # shallow copy
+        for step,todos in zip(['setup','execute','cleanup'],[setup_todos,execute_todos,cleanup_todos]):
+            for itodo,module_todo in enumerate(todos):
+                if isinstance(module_todo,dict):
+                    for module,todo in module_todo.items():
+                        break
+                elif isinstance(module_todo,str):
+                    split = module_todo.split(':')
+                    if len(split) == 1:
+                        split = (split[0],step)
+                    module,todo = split
+                else:
+                    module,todo = module_todo
+                if isinstance(module,str):
+                    module_names = [module.name for module in self.modules]
+                    if module in module_names:
+                        module = self.modules[module_names.index(module)]
+                    else:
+                        module = self.get_module_from_name(module)
+                        self.modules.append(module)
+                if module.name not in modules_todo:
+                    modules_todo[module.name] = []
+                last_step = modules_todo[module.name][-1] if modules_todo[module.name] else None
+                funcnames = []
+                if todo == 'setup':
+                    if last_step != 'cleanup': funcnames.append('cleanup')
+                    funcnames.append(todo)
+                elif todo == 'execute':
+                    if last_step not in ['setup','execute']: funcnames.append('setup')
+                    funcnames.append(todo)
+                elif todo == 'cleanup':
+                    if last_step not in ['setup','execute']: funcnames.append('setup')
+                    funcnames.append(todo)
+                modules_todo[module.name] += funcnames
+                self_todos = getattr(self,'{}_todos'.format(step))
+                self_todos += [ModuleTodo(self,module,funcnames=funcnames)]
+        module_names = [module.name for module in self.modules]
+
+        for module_name,todo in modules_todo.items():
+            if todo[-1] != 'cleanup':
+                module = self.modules[module_names.index(module_name)]
+                self.cleanup_todos += [ModuleTodo(self,module,funcnames='cleanup')]
         for module in self.modules:
-            module.set_data_block(self.pipe_block)
+            if module.name not in modules_todo:
+                self.setup_todos += [ModuleTodo(self,module,funcnames='setup')]
+                self.execute_todos += [ModuleTodo(self,module,funcnames='execute')]
+                self.cleanup_todos += [ModuleTodo(self,module,funcnames='cleanup')]
 
-    def _get_modules_from_filename(self, names):
-        """Convenient method to load modules for module names."""
-        modules = []
-        for name in names:
-            module = BaseModule.from_filename(name=name,options=SectionBlock(self.config_block,name),config_block=self.config_block,data_block=self.pipe_block)
-            modules.append(module)
-        return modules
-
-    def yield_setup(self, modules=None):
-        """Yield :attr:`modules` after calling :meth:`~BaseModule.setup`."""
-        if modules is None:
-            modules = self.modules
-        self.pipe_block = self.data_block.copy()
-        for module in modules:
-            module.set_data_block(self.pipe_block)
-            module.setup()
-            yield module
-
-    def yield_execute(self, modules=None):
-        """Yield :attr:`modules` after calling :meth:`~BaseModule.execute`."""
-        if modules is None:
-            modules = self.modules
-        self.pipe_block = self.data_block.copy()
-        for module in modules:
-            module.set_data_block(self.pipe_block)
-            module.execute()
-            yield module
-
-    def yield_cleanup(self, modules=None):
-        """Yield :attr:`modules` after calling :meth:`~BaseModule.cleanup`."""
-        if modules is None:
-            modules = self.modules
-        for module in modules:
-            module.cleanup()
-            yield module
+    def get_module_from_name(self, name):
+        options = SectionBlock(self.config_block,name)
+        #if not any(key in options for key in ['module_name','module_file','module_class']):
+        #    options['module_name'] = 'pypescript.module'
+        #    options['module_class'] = 'BasePipeline'
+        return BaseModule.from_filename(name=name,options=options,config_block=self.config_block,data_block=self.pipe_block)
 
     def setup(self):
         """Set up :attr:`modules`."""
-        for module in self.yield_setup():
-            pass
+        self.pipe_block = self.data_block.copy()
+        for todo in self.setup_todos:
+            todo()
+
+    @staticmethod
+    def mpi_distribute(data_block, dests, mpicomm=None):
+        for key,value in data_block.items():
+            if hasattr(value,'mpi_distribute'):
+                data_block[key] = value.mpi_distribute(dests=dests,mpicomm=mpicomm)
+        return data_block
 
     def execute(self):
         """Execute :attr:`modules`."""
-        for module in self.yield_execute():
-            pass
+        pipe_block = self.pipe_block = self.data_block.copy()
+        if self._iter is None:
+            for todo in self.execute_todos:
+                todo()
+        else:
+            key_to_ranks = {key:None for key in self._datablock_bcast}
+
+            with utils.TaskManager(nprocs_per_task=self.nprocs_per_task,mpicomm=self.mpicomm) as tm:
+
+                data_block = BasePipeline.mpi_distribute(self.data_block.copy(),dests=tm.self_worker_ranks,mpicomm=tm.mpicomm)
+
+                for itask,task in tm.iterate(list(enumerate(self._iter))):
+                    self.pipe_block = data_block.copy()
+                    self.pipe_block['mpi','comm'] = tm.mpicomm
+                    for key,value in self._configblock_iter.items():
+                        self.config_block[key] = task if value is None else value(task)
+                    for key,value in self._datablock_iter.items():
+                        self.pipe_block[key] = task if value is None else value(task)
+                    for todo in self.execute_todos:
+                        todo()
+                    for keyg,keyl in self._datablock_iter_key.items():
+                        key = keyl[itask]
+                        pipe_block[key] = self.pipe_block[keyg]
+                        #if tm.mpicomm.rank == 0:
+                        #    key_to_ranks[key] = tm.basecomm.rank
+                        #key_to_ranks[key] = tm.mpicomm.allgather(tm.basecomm.rank)
+                        key_to_ranks[key] = tm.basecomm.rank
+
+                tm.basecomm.Barrier()
+                for key in self._datablock_bcast:
+                    ranks = tm.basecomm.allgather(key_to_ranks[key])
+                    ranks = [r for r in ranks if r is not None]
+                    if not ranks:
+                        raise RuntimeError('(section, name) = {} has not been added to pipe_block'.format(key))
+                    #elif len(ranks) > 1:
+                    #    raise RuntimeError('(section, name) = {} has been used {} times'.format(key,len(ranks)))
+                    #key_to_ranks[key] = ranks[0]
+                    key_to_ranks[key] = ranks
+
+                #tm.basecomm.Barrier()
+                for key in self._datablock_bcast:
+                    cls = None
+                    if tm.basecomm.rank in key_to_ranks[key]:
+                        toranks = tm.other_ranks
+                        value = pipe_block[key]
+                        if hasattr(value,'mpi_collect'):
+                            cls = value.__class__
+                            if tm.basecomm.rank == key_to_ranks[key][0]:
+                                for rank in toranks:
+                                    tm.basecomm.send(cls,dest=rank,tag=41)
+                        elif tm.basecomm.rank == key_to_ranks[key][0]:
+                            for rank in toranks:
+                                tm.basecomm.send(None,dest=rank,tag=41)
+                                tm.basecomm.send(pipe_block[key],dest=rank,tag=42)
+                    else:
+                        cls = tm.basecomm.recv(source=key_to_ranks[key][0],tag=41)
+                        if cls is None:
+                            pipe_block[key] = tm.basecomm.recv(source=key_to_ranks[key][0],tag=42)
+                    if cls is not None:
+                        pipe_block[key] = cls.mpi_collect(pipe_block.get(*key,None),sources=key_to_ranks[key],mpicomm=tm.basecomm)
+
+                self.pipe_block = pipe_block
 
     def cleanup(self):
         """Clean up :attr:`modules`."""
-        for module in self.yield_cleanup():
-            pass
+        self.pipe_block = self.data_block.copy()
+        for todo in self.cleanup_todos:
+            todo()
 
     def __getattribute__(self, name):
         """
@@ -396,7 +561,7 @@ class BasePipeline(BaseModule):
         :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
         """
         if name in ['setup','execute','cleanup']:
-            fun = super(BaseModule,self).__getattribute__(name)
+            fun = object.__getattribute__(self,name)
 
             def wrapper(*args,**kwargs):
                 try:
@@ -410,7 +575,7 @@ class BasePipeline(BaseModule):
 
             return wrapper
 
-        return super(BaseModule,self).__getattribute__(name)
+        return object.__getattribute__(self,name)
 
 
     def plot_pipeline_graph(self, filename):
@@ -432,6 +597,6 @@ class BasePipeline(BaseModule):
             callback(module,self)
 
         graph.layout('dot')
-        self.logger.info('Saving graph to {}.'.format(filename))
+        self.log_info('Saving graph to {}.'.format(filename),rank=0)
         utils.mkdir(os.path.dirname(filename))
         graph.draw(filename)

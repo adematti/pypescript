@@ -36,8 +36,7 @@ def test_py(name='test'):
     basic_run(name,options)
 
     options = {}
-    options['module_name'] = 'template_lib.module_py.module'
-    options['module_class'] = 'AnyModule'
+    options['module_name'] = 'template_lib.module_py.other_module'
     basic_run(name,options)
 
 
@@ -65,7 +64,7 @@ def test_extensions(name='test'):
         module = BaseModule.from_filename(name=name,options=options)
         #basic_run_dynamic(library)
         with MemoryMonitor() as mem:
-            for i in range(1000):
+            for i in range(100):
                 basic_run(module)
 
 

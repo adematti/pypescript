@@ -1,13 +1,15 @@
 import numpy as np
 import pytest
 
-from pypescript.block import BlockMapping, DataBlock
+from pypescript.block import BlockMapping, DataBlock, SectionBlock
+from pypescript.config import ConfigBlock
 from pypescript.utils import setup_logging, MemoryMonitor
 
 
 def test_mapping():
 
     mapping = BlockMapping()
+    assert repr(mapping) == 'BlockMapping({})'
     assert str(mapping) == '{}'
     mapping_ = {('parameters','a'):('parameters','b'),'section_a':'section_b'}
     mapping = BlockMapping(mapping_)
@@ -47,14 +49,17 @@ def test_mapping():
 def test_block():
 
     block = DataBlock(add_sections=[])
+    del block['mpi']
     assert str(block.data) == '{}'
     block = DataBlock(None,add_sections=[])
+    del block['mpi']
     assert str(block.data) == '{}'
-    d = {'section_a':{'name_a':{'answer':42}},'section_b':{'name_b':2}}
+    d = {'section_a':{'name_a':{'answer':42}},'section_b':{'name_b':2,'name_c':4}}
     block = DataBlock(d,add_sections=[])
+    del block['mpi']
     assert str(block.data) == str(d)
     assert str(DataBlock.from_state(block.__getstate__()).data) == str(d)
-    assert block.keys() == [('section_a','name_a'),('section_b','name_b')]
+    assert block.keys() == [('section_a','name_a'),('section_b','name_b'),('section_b','name_c')]
     assert block.keys('section_a') == block.keys(section='section_a') == [('section_a','name_a')]
     with pytest.raises(TypeError):
         block.get()
@@ -73,20 +78,22 @@ def test_block():
     assert block.has('section_a')
     assert ('section_a','name_a') in block
     assert block.has('section_a','name_a')
-    assert block.items() == [(('section_a', 'name_a'), {'answer':42}), (('section_b', 'name_b'), 2)]
+    assert block.items() == [(('section_a', 'name_a'), {'answer':42}), (('section_b', 'name_b'), 2), (('section_b', 'name_c'), 4)]
     block_copy = block.copy()
     block_copy = block.copy(nocopy=['section_b'])
+
     block['section_a']['name_b'] = 5
     assert block_copy['section_a'] == {'name_a':{'answer':42}}
     assert ('section_a','name_b') not in block_copy
     assert block.has('section_a','name_b')
     #block['section_b']['name_c'] = 5
-    block['section_b'] = {'name_c':5}
+    block['section_b'] = {'name_d':5}
     assert block_copy['section_b'] == block['section_b']
     block['section_a','name_a'] = 1 #np.ones(10000)
     block.set_mapping({'section_c':'section_a'})
     assert np.all(block['section_c','name_a'] == block['section_a','name_a'])
     block.set_mapping(BlockMapping({}))
+
     with pytest.raises(KeyError):
         block['section_c','name_a']
     block.set_mapping(BlockMapping({'section_a.name_b':'section_a.name_a'},sep='.'))
@@ -103,18 +110,42 @@ def test_block():
     assert block.data == {}
     with pytest.raises(AttributeError):
         block.data = {'section_a':{'name_a':2}}
-    # Test cyclic garbage collection, not worth than python dict itself
+    # Test cyclic garbage collection, not worse than python dict itself
+
+    block = DataBlock()
     block['block','name_a'] = block
+    block['block','name_b'] = block
+
+    #block = {}
+    #block['block','name_a'] = block
     #test = {}
     #test['a'] = np.ones(10000)
     #test['b'] = test
 
 
+def test_sections():
+    d = {'section_a':{'name_a':{'answer':42}},'section_b':{'name_b':2}}
+    block = DataBlock(d,add_sections=[])
+    section = SectionBlock(block,'section_a')
+
+
+def test_config():
+    config = ConfigBlock('config.yaml')
+    assert config.data == {'hello': {'world': 42, 'answer': 42}}
+    config2 = ConfigBlock(config)
+    assert id(config2.data) == id(config.data)
+    config2['hello'] = config['hello']
+    assert config2['hello'] == {'world': 42, 'answer': 42}
+
 
 if __name__ == '__main__':
 
     setup_logging()
+
     with MemoryMonitor() as mem:
         for i in range(5000):
             test_mapping()
             test_block()
+            test_sections()
+
+    test_config()

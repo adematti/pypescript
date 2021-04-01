@@ -1,4 +1,3 @@
 - common
-- parameters
-- likelihood
-- nocopy: [parameters, likelihood, common]
+- mpi
+- nocopy: [common, mpi]

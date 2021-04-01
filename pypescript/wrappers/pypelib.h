@@ -1,6 +1,8 @@
 #ifndef _PYPE_LIB_
 #define _PYPE_LIB_
 
+#include <mpi.h>
+#include <mpi4py/mpi4py.h>
 #include "blockmodule.h"
 #include "section_names.h"
 
@@ -51,6 +53,10 @@ int DataBlock_move_value(DataBlock *data_block, const char * section1, const cha
 int DataBlock_get_capsule_default(DataBlock *data_block, const char * section, const char * name, void ** value, void * default_value);
 
 int DataBlock_get_capsule(DataBlock *data_block, const char * section, const char * name, void ** value);
+
+int DataBlock_get_mpi_comm_default(DataBlock *data_block, const char * section, const char * name, MPI_Comm * value, MPI_Comm default_value);
+
+int DataBlock_get_mpi_comm(DataBlock *data_block, const char * section, const char * name, MPI_Comm * value);
 
 int DataBlock_get_int_default(DataBlock *data_block, const char * section, const char * name, int * value, int default_value);
 

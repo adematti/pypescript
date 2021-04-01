@@ -195,8 +195,15 @@ Py_ssize_t PyBlockMapping_Size(PyBlockMapping *self)
 
 PyObject * PyBlockMapping_Repr(PyBlockMapping *self)
 {
-  return PyObject_Repr((PyObject *) self->data);
+  return PyUnicode_FromFormat("BlockMapping(%S)",(PyObject *) self->data);
 }
+
+
+PyObject * PyBlockMapping_Str(PyBlockMapping *self)
+{
+  return PyObject_Str((PyObject *) self->data);
+}
+
 
 static int mapping_init(PyBlockMapping *self, PyObject *args, PyObject *kwds)
 {
@@ -306,4 +313,5 @@ PyTypeObject PyBlockMappingType = {
   .tp_methods = PyBlockMapping_methods,
   .tp_getset = PyBlockMapping_properties,
   .tp_repr = (reprfunc) PyBlockMapping_Repr,
+  .tp_str = (reprfunc) PyBlockMapping_Str
 };

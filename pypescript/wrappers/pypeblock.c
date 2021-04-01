@@ -3,6 +3,9 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include "pypelib.h"
+#include <mpi.h>
+#define MPICH_SKIP_MPICXX 1
+#define OMPI_SKIP_MPICXX  1
 
 #define GENERATE_GET_SCALAR(__name,__type,__conversion)\
   int DataBlock_get_##__name##_default(DataBlock *data_block, const char * section, const char * name, __type * value, __type default_value)\
@@ -80,6 +83,7 @@
 __attribute__((constructor)) void init(void) {
   Py_Initialize();
   import_array();
+  import_mpi4py();
   import_datablock();
 }
 
@@ -185,6 +189,8 @@ int DataBlock_move_value(DataBlock *data_block, const char * section1, const cha
 
 GENERATE_GET_SCALAR(capsule,void *,PyCapsule_GetPointer(py_value, NULL))
 
+GENERATE_GET_SCALAR(mpi_comm,MPI_Comm,*PyMPIComm_Get(py_value))
+
 GENERATE_GET_SCALAR(int,int,PyLong_AsLong(py_value))
 
 GENERATE_GET_SCALAR(long,long,PyLong_AsLong(py_value))
@@ -230,3 +236,16 @@ GENERATE_SET_ARRAY(float,float,NPY_FLOAT)
 GENERATE_SET_ARRAY(double,double,NPY_DOUBLE)
 
 GENERATE_SET_ARRAY(string,char *,NPY_STRING)
+
+/*
+int DataBlock_get_mpi_comm(DataBlock *data_block, const char * section, const char * name, MPI_Comm * value)
+{
+  PyObject * py_value = DataBlock_get_py_value(data_block, section, name, NULL);
+  if (py_value == NULL) return -1;
+  *value = *PyMPIComm_Get(py_value);
+  Py_XDECREF(py_value);
+  if (value == NULL) return -1;
+  if (PyErr_Occurred()) return -1;
+  return 0;
+}
+*/

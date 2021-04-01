@@ -11,63 +11,6 @@ PyObject * PyDataBlock_Sections(PyDataBlock *self)
 }
 
 
-PyObject * datablock_keys(PyDataBlock *self, PyObject *args, PyObject *kwds)
-{
-  static char *kwlist[] = {"section", NULL};
-  PyObject *section = NULL;
-  PyObject *keys = NULL, *iter_sections = NULL, *sections = NULL, *iter_names, *name, *item = NULL;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|U", kwlist, &section))
-    return NULL;
-
-  if (section != NULL) {
-    sections = Py_BuildValue("[O]",section); // raises error if NULL
-    if (sections == NULL) goto except;
-  }
-  else {
-    sections = PyDataBlock_Sections(self);
-    if (sections == NULL) {
-      PyErr_SetString(PyExc_TypeError,"Failed to get sections");
-      goto except;
-    }
-  }
-
-  keys = PyList_New(0);
-  if (keys == NULL) {
-    PyErr_SetString(PyExc_TypeError,"Failed to create list");
-    goto except;
-  }
-  iter_sections = PyObject_GetIter(sections); // raises error if NULL
-  if (iter_sections == NULL) goto except;
-  while ((section = PyIter_Next(iter_sections))) {
-    iter_names = PyObject_GetIter(PyDict_GetItem((PyObject *) self->data, section)); // ok because GetItem returns borrowed reference
-    if (iter_names == NULL) {Py_XDECREF(section); goto except;};
-    while ((name = PyIter_Next(iter_names))) {
-      item = Py_BuildValue("(NN)", section, name); // raises error if NULL, N steals reference
-      if (item == NULL) {Py_XDECREF(name); Py_XDECREF(section); Py_XDECREF(iter_names); goto except;};
-      if (PyList_Append(keys, item) != 0) {
-        PyErr_SetString(PyExc_TypeError,"Failed to add item to list");
-        //Py_XDECREF(item); Py_XDECREF(name); Py_XDECREF(section); Py_XDECREF(iter_names);
-        Py_XDECREF(item); Py_XDECREF(iter_names);
-        goto except;
-      }
-      Py_XDECREF(item);
-      //Py_XDECREF(name);
-    }
-    //Py_XDECREF(section);
-    Py_XDECREF(iter_names);
-  }
-  assert(!PyErr_Occurred());
-  goto finally;
-except:
-  assert(PyErr_Occurred());
-  Py_XDECREF(keys);
-  keys = NULL;
-finally:
-  Py_XDECREF(sections);
-  Py_XDECREF(iter_sections);
-  return keys;
-}
-
 int PyDataBlock_HasSection(PyDataBlock *self, PyObject *section)
 {
   return PyDict_Contains((PyObject *) ((PyDataBlock *) self)->data, section);
@@ -92,6 +35,63 @@ except:
   toret = NULL;
 finally:
   return toret;
+}
+
+PyObject * datablock_keys(PyDataBlock *self, PyObject *args, PyObject *kwds)
+{
+  static char *kwlist[] = {"section", NULL};
+  PyObject *section = NULL, *section_data = NULL;
+  PyObject *keys = NULL, *iter_sections = NULL, *sections = NULL, *iter_names = NULL, *name = NULL, *item = NULL;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "|U", kwlist, &section))
+    return NULL;
+
+  if (section != NULL) {
+    sections = Py_BuildValue("[O]",section); // raises error if NULL
+    if (sections == NULL) goto except;
+  }
+  else {
+    sections = PyDataBlock_Sections(self);
+    if (sections == NULL) {
+      PyErr_SetString(PyExc_TypeError,"Failed to get sections");
+      goto except;
+    }
+  }
+
+  keys = PyList_New(0);
+  if (keys == NULL) {
+    PyErr_SetString(PyExc_TypeError,"Failed to create list");
+    goto except;
+  }
+  iter_sections = PyObject_GetIter(sections); // raises error if NULL
+  if (iter_sections == NULL) goto except;
+  while ((section = PyIter_Next(iter_sections))) {
+    section_data = PyDataBlock_GetSection(self, section, NULL); // new reference
+    if (section_data == NULL) {Py_XDECREF(section); goto except;};
+    iter_names = PyObject_GetIter(section_data);
+    if (iter_names == NULL) {Py_XDECREF(section_data); Py_XDECREF(section); goto except;};
+    while ((name = PyIter_Next(iter_names))) {
+      item = Py_BuildValue("(ON)", section, name); // raises error if NULL, N steals reference
+      if (item == NULL) {Py_XDECREF(name); Py_XDECREF(iter_names); Py_XDECREF(section_data); Py_XDECREF(section); goto except;};
+      if (PyList_Append(keys, item) != 0) {
+        PyErr_SetString(PyExc_TypeError,"Failed to add item to list");
+        Py_XDECREF(item); Py_XDECREF(iter_names); Py_XDECREF(section_data); Py_XDECREF(section);
+        goto except;
+      }
+      Py_XDECREF(item);
+      //Py_XDECREF(name);
+    }
+    Py_XDECREF(iter_names); Py_XDECREF(section_data); Py_XDECREF(section);
+  }
+  //assert(!PyErr_Occurred());
+  goto finally;
+except:
+  //assert(PyErr_Occurred());
+  Py_XDECREF(keys);
+  keys = NULL;
+finally:
+  Py_XDECREF(sections);
+  Py_XDECREF(iter_sections);
+  return keys;
 }
 
 static PyObject * PyDataBlock_GetValue(PyDataBlock *self, PyObject *section, PyObject *name, PyObject *default_value)
@@ -191,9 +191,7 @@ PyObject * datablock_get(PyDataBlock *self, PyObject *args, PyObject *kwds)
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|OO", kwlist, &section, &name, &default_value))
     return NULL;
 
-  if (name == NULL) {
-    return PyDataBlock_GetSection(self, section, default_value);
-  }
+  if (name == NULL) return PyDataBlock_GetSection(self, section, default_value);
   return PyDataBlock_GetValue(self, section, name, default_value);
 }
 
@@ -224,10 +222,8 @@ PyObject * datablock_items(PyDataBlock *self, PyObject *args, PyObject *kwds)
     //Py_XDECREF(value);
     //Py_XDECREF(key);
   }
-  assert(!PyErr_Occurred());
   goto finally;
 except:
-  assert(PyErr_Occurred());
   Py_XDECREF(items);
   items = NULL;
 finally:
@@ -247,8 +243,10 @@ int PyDataBlock_SetSection(PyDataBlock *self, PyObject *section, PyObject *value
   if (PyDataBlock_HasSection(self, section)) {
     item = PyDataBlock_GetSection(self, section, NULL);
     if (item == NULL) goto except;
-    PyDict_Clear(item);
-    if (PyDict_Update(item,value) != 0) goto except;
+    if (item != value) {
+      PyDict_Clear(item);
+      if (PyDict_Update(item,value) != 0) goto except;
+    }
     goto finally;
   }
   item = PyDict_Copy(value);
@@ -273,7 +271,9 @@ static int PyDataBlock_SetValue(PyDataBlock *self, PyObject *section, PyObject *
   }
   item = PyDataBlock_GetSection(self, true_section, NULL);
   if (item == NULL) goto except;
+  //printf("Ref set data 1 %d %d\n",Py_REFCNT(self),Py_REFCNT(value));
   toret = PyDict_SetItem(item, true_name, value);
+  //printf("Ref set data 2 %d %d\n",Py_REFCNT(self),Py_REFCNT(value));
   goto finally;
 except:
   toret = -1;
@@ -372,7 +372,7 @@ finally:
 }
 
 
-int PyDataBlock_Del(PyDataBlock *self, PyObject *args)
+int datablock_del(PyDataBlock *self, PyObject *args)
 {
 
   PyObject *section = NULL, *name = NULL;
@@ -387,7 +387,7 @@ static int datablock_assub(PyDataBlock *self, PyObject *key, PyObject *value)
 {
   int toret = 0;
   if (value == NULL) {
-    if (PyTuple_Check(key)) return PyDataBlock_Del(self, key);
+    if (PyTuple_Check(key)) return datablock_del(self, key);
     return PyDataBlock_DelSection(self, key);
   }
   PyObject *section = NULL, *name = NULL;
@@ -427,7 +427,9 @@ int PyDataBlock_Update(PyDataBlock *self, PyObject *other, PyObject *nocopy)
 
   if (nocopy == NULL) {
     while (PyDict_Next(other, &position, &section, &item)) {
+      //printf("Ref count 1 %d %d\n",Py_REFCNT(section),Py_REFCNT(item));
       if (PyDataBlock_SetSection(self, section, item) != 0) goto except;
+      //printf("Ref count 2 %d %d\n",Py_REFCNT(section),Py_REFCNT(item));
     }
     goto finally;
   }
@@ -437,6 +439,7 @@ int PyDataBlock_Update(PyDataBlock *self, PyObject *other, PyObject *nocopy)
   }
   while (PyDict_Next(other, &position, &section, &item)) {
     int contains = PySequence_Contains(nocopy, section);
+    //printf("Contains %d\n",contains);
     if (contains < 0) goto except;
     else if (contains) {
       if (PyDict_SetItem((PyObject *) self->data, section, item) != 0) goto except;
@@ -584,8 +587,14 @@ Py_ssize_t PyDataBlock_Size(PyDataBlock *self)
 
 PyObject * PyDataBlock_Repr(PyDataBlock *self)
 {
-  return PyUnicode_FromFormat("DataBlock %S with BlockMapping %S", (PyObject *) self->data, (PyObject *) self->mapping);
+  return PyUnicode_FromFormat("DataBlock(data=%S, mapping=%S)", (PyObject *) self->data, (PyObject *) self->mapping);
 }
+
+PyObject * PyDataBlock_Str(PyDataBlock *self)
+{
+  return PyUnicode_FromFormat("DataBlock(data=%S, mapping=%S)", (PyObject *) self->data, (PyObject *) self->mapping);
+}
+
 
 static int datablock_init(PyDataBlock *self, PyObject *args, PyObject *kwds)
 {
@@ -711,6 +720,7 @@ PyTypeObject PyDataBlockType = {
   .tp_methods = PyDataBlock_methods,
   .tp_getset = PyDataBlock_properties,
   .tp_repr = (reprfunc) PyDataBlock_Repr,
+  .tp_str = (reprfunc) PyDataBlock_Str
 };
 
 /*

@@ -22,6 +22,7 @@
 
 module FModule
 
+  use mpi
   use pypescript_types
   use pypescript_block
   implicit none
@@ -43,7 +44,7 @@ module FModule
     ! In the following we are doing stupid things as an example
     ! Return -1 if something wrong happens
     DECLARATIONS
-    character(len=40) :: msg
+    character(len=100) :: msg
     integer, parameter :: ndim = NDIM
     integer(kind=c_int) :: answer
     integer(kind=c_long) :: long_answer
@@ -55,6 +56,9 @@ module FModule
     integer(kind=c_long), pointer, dimension(:) :: long_array
     real(kind=c_float), pointer, dimension(:) :: float_array
     real(kind=c_double), pointer, dimension(:) :: double_array
+    integer :: comm
+    integer :: rank, size, nlen, ierr
+    character (len=MPI_MAX_PROCESSOR_NAME) :: pname
     status = 0
     shpe = ASIZE
     answer = 0
@@ -62,7 +66,15 @@ module FModule
     write(msg, '("Setting up module [",A,"].")') trim(name)
     status = log_info(MODULE_NAME, msg)
 
-    ! Setting a non-NULL pointer as last argument makes the first one point to its value if no value is found in config_block
+    if (DataBlock_get_mpi_comm_default(data_block, MPI_SECTION, "comm", comm, MPI_COMM_WORLD) .lt. 0) goto 1
+
+    call MPI_Comm_rank(comm, rank, ierr)
+    call MPI_Comm_size(comm, size, ierr)
+    call MPI_Get_processor_name(pname, nlen, ierr)
+    write(msg, '("Hello, World! I am process ",I2," of ",I2," on ",A,".")')  rank, size, pname(1:nlen)
+    ! write(msg, '("Hello, World! I am process ",I2," of ",I2," on ")')  rank, size
+    status = log_info(MODULE_NAME, msg)
+
     if (DataBlock_get_int_default(config_block, name, "answer", answer, ANSWER) .lt. 0) goto 1
     if (answer .ne. ANSWER) goto 1
     if (DataBlock_get_long_default(config_block, name, "answer", long_answer, int(ANSWER,kind=c_long)) .lt. 0) goto 1

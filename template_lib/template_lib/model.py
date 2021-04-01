@@ -29,12 +29,13 @@ class AffineModel(BaseModule):
 
     def setup(self):
         self.size = self.data_block.get(section_names.data,'y').size
+        self.x = self.data_block[section_names.data,'x']
         return 0
 
     def execute(self):
         a = self.data_block.get_float(section_names.parameters,'a')
         b = self.data_block.get_float(section_names.parameters,'b')
-        self.data_block[section_names.model,'y'] = a + b*self.data_block[section_names.data,'x']
+        self.data_block[section_names.model,'y'] = a + b*self.x
         return 0
 
     def cleanup(self):
