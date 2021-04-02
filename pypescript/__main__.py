@@ -6,6 +6,7 @@ import argparse
 from ._version import __version__
 from .utils import setup_logging
 from .main import main as pypescript_main
+from .mpi import CurrentMPIComm
 
 ascii_art = """\
                                         _       _
@@ -20,7 +21,7 @@ ascii_art = """\
 
 
 def main(args=None):
-    print(ascii_art)
+    if CurrentMPIComm.get().rank == 0: print(ascii_art)
     parser = argparse.ArgumentParser(description=main.__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('config_fn', type=str, help='Name of configuration file')
     parser.add_argument('--pipe-graph-fn', type=str, default=None,

@@ -361,10 +361,11 @@ class BasePipeline(BaseModule):
                     raise ValueError('Incorrect {} key: {}.'.format(block,key))
                 if value is None:
                     value = lambda i: i
-                #elif isinstance(value,list):
-                #    if not len(value) == len(self._iter):
-                #        raise ValueError('{} {} list must be of the same length as iter = {:d}.'.format(block,key,len(self._iter)))
-                #    value = lambda i: value[i]
+                elif isinstance(value,list):
+                    if not len(value) == len(self._iter):
+                        raise ValueError('{} {} list must be of the same length as iter = {:d}.'.format(block,key,len(self._iter)))
+                    tab = value
+                    value = lambda i: tab[i]
                 else:
                     value = eval(value)
                     if not callable(value):
@@ -539,7 +540,7 @@ class BasePipeline(BaseModule):
                         elif tm.basecomm.rank == key_to_ranks[key][0]:
                             for rank in toranks:
                                 tm.basecomm.send(None,dest=rank,tag=41)
-                                tm.basecomm.send(pipe_block[key],dest=rank,tag=42)
+                                tm.basecomm.send(value,dest=rank,tag=42)
                     else:
                         cls = tm.basecomm.recv(source=key_to_ranks[key][0],tag=41)
                         if cls is None:
