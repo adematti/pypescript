@@ -26,8 +26,10 @@ def main(args=None):
     parser.add_argument('config_fn', type=str, help='Name of configuration file')
     parser.add_argument('--pipe-graph-fn', type=str, default=None,
                         help='If provided, save graph of the pipeline to this file name')
+    parser.add_argument('--log-level', type=str, default='info', choices=['warning','info','debug'],
+                        help='Logging level')
     opt = parser.parse_args(args=args)
-    setup_logging()
+    setup_logging(level=opt.log_level)
     return pypescript_main(config=opt.config_fn,pipe_graph_fn=opt.pipe_graph_fn)
 
 

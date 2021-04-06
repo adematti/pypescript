@@ -3,7 +3,7 @@
 from .module import BasePipeline
 
 
-def main(config=None,pipe_graph_fn=None):
+def main(config=None, pipe_graph_fn=None):
     """
     **pypescript** main function.
 

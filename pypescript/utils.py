@@ -277,15 +277,15 @@ class ScatteredBaseClass(_BaseClass):
         new.__setstate__(state)
         return new
 
-    def mpi_to_state(self, state):
-        state = mpi.CurrentMPIState(state)
-        if state == mpi.CurrentMPIState.GATHERED:
+    def mpi_to_state(self, mpistate):
+        mpistate = mpi.CurrentMPIState(mpistate)
+        if mpistate == mpi.CurrentMPIState.GATHERED:
             if self.is_mpi_scattered():
                 self.mpi_gather()
-        if state == mpi.CurrentMPIState.SCATTERED:
+        if mpistate == mpi.CurrentMPIState.SCATTERED:
             if self.is_mpi_gathered() or self.is_mpi_broadcast():
                 self.mpi_scatter()
-        if state == mpi.CurrentMPIState.BROADCAST:
+        if mpistate == mpi.CurrentMPIState.BROADCAST:
             if self.is_mpi_scattered():
                 self.mpi_gather()
             if self.is_mpi_gathered():
@@ -302,7 +302,8 @@ class ScatteredBaseClass(_BaseClass):
         new.mpiroot = mpiroot
         if new.is_mpi_root():
             state = np.load(filename,allow_pickle=True)[()]
-            new = cls.from_state(state,mpistate=mpi.CurrentMPIState.GATHERED,mpiroot=mpiroot,mpicomm=mpicomm)
+            new = cls.from_state(state,mpiroot=mpiroot,mpicomm=mpicomm)
+        new.mpistate = mpi.CurrentMPIState.GATHERED
         new = new.mpi_to_state(mpistate)
         return new
 

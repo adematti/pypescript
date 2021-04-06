@@ -571,7 +571,7 @@ class BasePipeline(BaseModule):
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
 
                 for keyg,keyl in self._datablock_copy.items():
-                    if keyg in self.pipe_block:
+                    if keyg in self.pipe_block: # because not necessarily present at each step...
                         self.data_block[keyl] = self.pipe_block[keyg]
 
             return wrapper
