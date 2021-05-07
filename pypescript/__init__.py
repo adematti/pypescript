@@ -5,6 +5,6 @@ from .config import ConfigBlock
 from .module import BaseModule, BasePipeline
 from .utils import setup_logging
 from . import section_names
-from . import syntax
+#from . import syntax
 
 from ._version import __version__
