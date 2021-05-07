@@ -34,10 +34,17 @@ class WriteSections(object):
             self.read_sections(filename)
         self.filename = filename
         self.max_string_length = max_string_length
+        try:
+            from pypescript import section_names
+            sections = [s for s in dir(section_names) if s != 'nocopy' and not (s.startswith('__') and s.endswith('__'))]
+            self.sections = sections + [s for s in self.sections if s not in sections]
+            self.nocopy = section_names.nocopy + [s for s in self.nocopy if s not in section_names.nocopy]
+        except ImportError:
+            # probably pypescript calling...
+            pass
 
     def read_sections(self, filename):
         """Read sections from *yaml* file ``filename``."""
-        utils.mkdir(filename)
         with open(filename,'r') as file:
             sections = yaml.load(file, Loader=yaml.FullLoader)
         for section in sections:

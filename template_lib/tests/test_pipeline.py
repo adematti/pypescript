@@ -13,6 +13,10 @@ base_dir = os.path.dirname(os.path.realpath(__file__))
 demo_dir = os.path.join(base_dir,'demos')
 
 
+def test_section_names():
+    assert 'mpi' in vars(section_names) # set up at installation
+
+
 def test_demo1():
 
     os.chdir(base_dir)
@@ -112,6 +116,7 @@ def test_demo4():
 if __name__ == '__main__':
 
     setup_logging()
+    test_section_names()
     with MemoryMonitor() as mem:
         for i in range(10):
             test_demo1()

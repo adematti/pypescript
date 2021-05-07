@@ -460,7 +460,7 @@ class BaseClass(_BaseClass):
 
 class MemoryMonitor(object):
     """
-    Class that monitors memory usage, useful to check for memory leaks.
+    Class that monitors memory usage and clock, useful to check for memory leaks.
 
     >>> with MemoryMonitor() as mem:
             '''do womething'''
@@ -468,7 +468,7 @@ class MemoryMonitor(object):
             '''do something else'''
     """
 
-    def __init__(self, pid=None, other=''):
+    def __init__(self, pid=None, msg=''):
         """
         Initalise :class:`MemoryMonitor` and register current memory usage.
 
@@ -481,8 +481,11 @@ class MemoryMonitor(object):
         self.proc = psutil.Process(os.getpid() if pid is None else pid)
         self.mem = self.proc.memory_info().rss / 1e6
         self.time = time.time()
-        self.other = other
-        print('({}) Using {:10.3f} [Mb]'.format(self.other,self.mem))
+        self.msg = msg
+        msg = 'using {:.3f} [Mb]'.format(self.mem)
+        if self.msg:
+            msg = '[{}] {}'.format(self.msg,msg)
+        print(msg)
 
     def __enter__(self):
         """Enter context."""
@@ -492,12 +495,13 @@ class MemoryMonitor(object):
         """Update memory usage."""
         mem = self.proc.memory_info().rss / 1e6
         t = time.time()
-        print('({}) Using {:10.3f} [Mb] {:+10.3f} [Mb] {:+10.3f} [s]'.format(self.other,mem,mem-self.mem,t-self.time))
+        msg = 'using {:.3f} [Mb] (increase of {:.3f} [Mb]) after {:.3f} [s]'.format(mem,mem-self.mem,t-self.time)
+        if self.msg:
+            msg = '[{}] {}'.format(self.msg,msg)
+        print(msg)
         self.mem = mem
         self.time = t
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         """Exit context."""
         self()
-        if exc_value is not None:
-            exception_handler(exc_type, exc_value, exc_traceback)

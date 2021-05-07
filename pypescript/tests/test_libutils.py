@@ -1,4 +1,4 @@
-from pypescript.setuppype.generate_pype_module_doc import generate_doc_rst_table
+from pypescript.libutils.generate_pype_module_doc import generate_doc_rst_table
 
 
 def test_rst_doc():

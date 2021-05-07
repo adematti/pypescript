@@ -2,7 +2,4 @@
 - data
 - covariance
 - likelihood
-- common
 - parameters
-- mpi
-- nocopy: [likelihood, common, mpi]

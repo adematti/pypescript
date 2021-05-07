@@ -1,4 +1,4 @@
-from pypescript.setuppype import setup
+from pypescript.libutils import setup
 
 
 setup(name='template_lib',

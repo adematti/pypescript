@@ -272,6 +272,7 @@ class DataBlock(block.DataBlock,BaseClass):
         if (section,name) not in self:
             self.set(section,name,value)
 
+
 def _make_getter(type_):
 
     def getter(self, section, name, *args, **kwargs):

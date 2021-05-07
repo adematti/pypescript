@@ -268,7 +268,9 @@ class setup(object):
             # if Python extensions, need to compile **pypescript** wrappers
             write_sections()
             pypelib_libraries = [(pypelib_wrappers['c'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.c')),
-                                                        'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include()]})]
+                                                        #'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include()]})]
+                                                        'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),
+                                                                        mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR')]})]
                                                         # Python include needed by pip, why?
             pypelib_libraries += [(pypelib_wrappers['fortran'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.F90')),
                                                         'extra_f90_compile_args':['-ffree-line-length-none']})]
@@ -323,7 +325,8 @@ class setup(object):
                         self.pypelib_block_dir = pkg_resources.resource_filename('pypescript','block')
                     compile_kwargs['sources'] = sum([glob.glob(os.path.abspath(os.path.join(module_dir,source))) for source in ext_sources],[])
                     compile_kwargs['include_dirs'] = addfirst(compile_kwargs.get('include_dirs',[]),
-                                                    self.pypelib_wrappers_dir,self.pypelib_block_dir,self.section_dir,mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR'))
+                                                    self.pypelib_wrappers_dir,self.pypelib_block_dir,self.section_dir,
+                                                    mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR'))
                     extension = Extension(full_name, module_dir=module_dir, doc=description.get('description',''),
                                             description_file=description_file, **compile_kwargs)
                     extensions.append(extension)
