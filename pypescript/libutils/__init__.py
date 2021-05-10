@@ -253,7 +253,6 @@ class setup(object):
             extras_require = {}
             with open(extras_require_, 'r') as fh:
                 extras_require['extras'] = [l.strip() for l in fh]
-                extras_require['full'] = extras_require['extras']
         extras_require = extras_require or {}
 
         self.set_pype_modules(include_pype_module_names=include_pype_module_names,exclude_pype_module_names=exclude_pype_module_names)
