@@ -1,7 +1,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
-#include "blockmodule.h"
+#include "blockmapping.h"
 
 int PyBlockMapping_SetItem(PyBlockMapping *self, PyObject *key, PyObject *value)
 {
@@ -180,7 +180,7 @@ finally:
   return toret;
 }
 
-static PyObject * mapping_data_getter(PyDataBlock *self, void *closure) {
+static PyObject * mapping_data_getter(PyBlockMapping *self, void *closure) {
   PyObject * toret = (PyObject *) self->data;
   Py_XINCREF(toret);
   return toret;

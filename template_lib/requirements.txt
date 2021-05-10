@@ -1,3 +1,0 @@
-pyyaml
-numpy
-mpi4py

@@ -2,6 +2,7 @@
 #define _BLOCK_MODULE_
 
 #include <Python.h>
+#include "blockmapping.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,31 +11,12 @@ extern "C" {
 typedef struct {
   PyObject_HEAD
   PyDictObject *data;
-} PyBlockMapping;
-
-PyTypeObject PyBlockMappingType;
-
-#define PyBlockMapping_Check(op) PyObject_TypeCheck(op, &PyBlockMappingType)
-
-PyBlockMapping * PyBlockMapping_New(void);
-
-PyBlockMapping * PyBlockMapping_Copy(PyBlockMapping *self);
-
-int PyBlockMapping_Update(PyBlockMapping *self, PyObject *other);
-
-int PyBlockMapping_ParseSectionName(PyBlockMapping *self, PyObject * section, PyObject * name, PyObject ** true_section, PyObject ** true_name);
-
-
-typedef struct {
-  PyObject_HEAD
-  PyDictObject *data;
   PyBlockMapping *mapping;
 } PyDataBlock;
 
-PyTypeObject PyDataBlockType;
+extern PyTypeObject PyDataBlockType;
 
 #define PyDataBlock_Check(op) PyObject_TypeCheck(op, &PyDataBlockType)
-
 
 /* C API functions */
 //int PyDataBlock_HasValue(PyDataBlock *self, PyObject *section, PyObject *name);
