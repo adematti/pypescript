@@ -3,19 +3,29 @@
 #include <structmember.h>
 #include "blockmapping.h"
 
+#define MAKE_TUPLE(__name)\
+  {\
+    Py_INCREF(__name);\
+    if (!PyTuple_Check(__name)) {\
+      __name = Py_BuildValue("(N)", __name);\
+      if (__name == NULL) {\
+        goto except;\
+      }\
+    }\
+  }\
+
 int PyBlockMapping_SetItem(PyBlockMapping *self, PyObject *key, PyObject *value)
 {
   int toret = 0;
-  if (PyTuple_Check(key) ^ PyTuple_Check(value)) {
-    PyErr_SetString(PyExc_TypeError,"(key,value) pairs should be both tuple or scalars.");
+
+  MAKE_TUPLE(key)
+  MAKE_TUPLE(value)
+  if (PyTuple_Size(value) != PyTuple_Size(key)) {
+    PyErr_Format(PyExc_TypeError,"Key, value = %S, %S should be of same size.", key, value);
     goto except;
   }
-  if (PyTuple_Check(key) && (PyTuple_Size(key) != 2)) {
-    PyErr_SetString(PyExc_TypeError,"If tuple, key should be of size 2 (section, name).");
-    goto except;
-  }
-  if (PyTuple_Check(value) && (PyTuple_Size(value) != 2)) {
-    PyErr_SetString(PyExc_TypeError,"If tuple, value should be of size 2 (section, name).");
+  if (PyTuple_Size(key) > 2) {
+    PyErr_Format(PyExc_TypeError,"Key, value = %S, %S should be of size < 2 (section, name).", key, value);
     goto except;
   }
   toret = PyDict_SetItem((PyObject *) self->data, key, value);
@@ -23,25 +33,54 @@ int PyBlockMapping_SetItem(PyBlockMapping *self, PyObject *key, PyObject *value)
 except:
   toret = -1;
 finally:
+  Py_XDECREF(key);
+  Py_XDECREF(value);
   return toret;
 }
 
 int PyBlockMapping_DelItem(PyBlockMapping *self, PyObject *key)
 {
-  return PyDict_DelItem((PyObject *) self->data, key);
+  MAKE_TUPLE(key)
+  int toret = PyDict_DelItem((PyObject *) self->data, key);
+  goto finally;
+except:
+  toret = -1;
+finally:
+  Py_XDECREF(key);
+  return toret;
+}
+
+PyObject * mapping_getitem(PyBlockMapping *self, PyObject *key)
+{
+  MAKE_TUPLE(key)
+  PyObject *toret = PyDict_GetItem((PyObject *) self->data, key);
+  goto finally;
+except:
+  toret = NULL;
+finally:
+  Py_XDECREF(key);
+  return toret;
 }
 
 PyObject * PyBlockMapping_GetItem(PyBlockMapping *self, PyObject *key)
 {
-  PyObject *toret = PyDict_GetItem((PyObject *) self->data, key);
+  PyObject *toret = mapping_getitem(self, key);
   Py_XINCREF(toret);
   return toret;
 }
 
 int PyBlockMapping_Contains(PyBlockMapping *self, PyObject *key) {
-  return PyDict_Contains((PyObject *) self->data, key);
+  MAKE_TUPLE(key)
+  int toret = PyDict_Contains((PyObject *) self->data, key);
+  goto finally;
+except:
+  toret = -1;
+finally:
+  Py_XDECREF(key);
+  return toret;
 }
 
+// just to avoid complaints
 static int mapping_contains(PyObject *self, PyObject *key) {
   return PyBlockMapping_Contains((PyBlockMapping *) self, key);
 }
@@ -53,11 +92,12 @@ int PyBlockMapping_ParseSectionName(PyBlockMapping *self, PyObject * section, Py
   key = Py_BuildValue("(OO)", section, name);
   if (key == NULL) goto except;
   if (PyBlockMapping_Contains(self, key) == 1) {
-    value = PyDict_GetItem((PyObject *) self->data, key);
+    value = mapping_getitem(self, key);
     if (!PyArg_ParseTuple(value, "OO", true_section, true_name)) goto except;
   }
   else if (PyBlockMapping_Contains(self, section) == 1) {
-    *true_section = PyDict_GetItem((PyObject *) self->data, section);
+    value = mapping_getitem(self, section);
+    if (!PyArg_ParseTuple(value, "O", true_section)) goto except;
     *true_name = name;
   }
   else {
@@ -284,7 +324,7 @@ static PySequenceMethods PyBlockMapping_as_sequence = {
   0,                          /* sq_slice */
   0,                          /* sq_ass_item */
   0,                          /* sq_ass_slice */
-  mapping_contains,      /* sq_contains */
+  mapping_contains,           /* sq_contains */
   0,                          /* sq_inplace_concat */
   0,                          /* sq_inplace_repeat */
 };

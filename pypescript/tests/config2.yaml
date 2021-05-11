@@ -1,1 +1,5 @@
-answer: 42
+answer:
+  to: 42
+  the: 44 #${the}
+
+#the: 44

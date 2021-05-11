@@ -104,12 +104,6 @@ def snake_to_pascal_case(snake):
     return ''.join(map(str.title,words))
 
 
-def split_section_name(section_name, sep='.'):
-    if isinstance(section_name,str):
-        return tuple(section_name.strip().split(sep))
-    return section_name
-
-
 def addclslogger(cls):
 
     cls.logger = logging.getLogger(cls.__name__)
@@ -447,7 +441,9 @@ class BaseClass(_BaseClass):
         new = cls.__new__(cls)
         new.mpicomm = mpicomm
         new.mpiroot = mpiroot
-        state = np.load(filename,allow_pickle=True)[()]
+        if new.is_mpi_root():
+            state = np.load(filename,allow_pickle=True)[()]
+        state = new.mpicomm.bcast(state if new.is_mpi_root() else None,root=new.mpiroot)
         new = cls.from_state(state,mpiroot=mpiroot,mpicomm=mpicomm)
         return new
 

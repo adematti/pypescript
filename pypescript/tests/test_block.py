@@ -4,6 +4,7 @@ import pytest
 from pypescript.block import BlockMapping, DataBlock, SectionBlock
 from pypescript.config import ConfigBlock
 from pypescript.utils import setup_logging, MemoryMonitor
+from pypescript import syntax
 
 
 def test_mapping():
@@ -11,13 +12,14 @@ def test_mapping():
     mapping = BlockMapping()
     assert repr(mapping) == 'BlockMapping({})'
     assert str(mapping) == '{}'
-    mapping_ = {('parameters','a'):('parameters','b'),'section_a':'section_b'}
+    mapping_ = {('parameters','a'):('parameters','b'),('section_a',):('section_b',)}
+    str_ = str(mapping_)
     mapping = BlockMapping(mapping_)
-    assert str(mapping) == str(mapping_)
+    assert str(mapping) == str_
     mapping_str = {'parameters.a':'parameters.b','section_a':'section_b'}
-    mapping = BlockMapping(mapping)
-    assert str(mapping) == str(mapping_)
-    assert str(BlockMapping.from_state(mapping.__getstate__())) == str(mapping_)
+    mapping = BlockMapping(mapping_str,sep='.')
+    assert str(mapping) == str_
+    assert str(BlockMapping.from_state(mapping.__getstate__())) == str_
     assert set(mapping.keys()) == set(mapping_.keys())
     assert set(mapping.items()) == set(mapping_.items())
     mapping['section_a_copy'] = mapping['section_a']
@@ -30,9 +32,9 @@ def test_mapping():
     with pytest.raises(TypeError):
         mapping['parameters','b'] = 'b'
     del mapping['parameters','b']
-    assert str(mapping) == str(mapping_)
+    assert str(mapping) == str_
     mapping.update(mapping)
-    assert str(mapping) == str(mapping_)
+    assert str(mapping) == str_
     mapping.update({('parameters','b'):('parameters','c')})
     assert 'section_a' in mapping
     assert ('parameters','b') in mapping
@@ -131,11 +133,10 @@ def test_sections():
 
 def test_config():
     config = ConfigBlock('config.yaml')
-    assert config.data == {'hello': {'world': 42, 'answer': 42}}
+    assert config.data == {'hello': {'answer': {'to': 42, 'the': 44}, 'world': 42, 'answer2': 44,
+    'localpath': 'myglobalpath', syntax.module_name: 'hello'}, 'testdict': {'a':{'b':{'c': 42}}}}
     config2 = ConfigBlock(config)
     assert id(config2.data) == id(config.data)
-    config2['hello'] = config['hello']
-    assert config2['hello'] == {'world': 42, 'answer': 42}
 
 
 if __name__ == '__main__':

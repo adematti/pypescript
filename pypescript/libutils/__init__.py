@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import glob
 import sysconfig
 import pkg_resources
@@ -11,6 +12,7 @@ from numpy.distutils.extension import Extension as _Extension
 from numpy.distutils.extension import fortran_pyf_ext_re
 from numpy.distutils.command.build_src import build_src as _build_src
 from numpy.distutils.command.build_src import appendpath
+from numpy.distutils.command.develop import develop as _develop
 from numpy.distutils import log
 from numpy.distutils.core import setup as _setup
 from distutils.dep_util import newer_group
@@ -249,10 +251,8 @@ class setup(object):
                 install_requires = [name.strip() for name in file]
         install_requires = install_requires or []
         if isinstance(extras_require,str):
-            extras_require_ = extras_require
-            extras_require = {}
-            with open(extras_require_, 'r') as fh:
-                extras_require['extras'] = [l.strip() for l in fh]
+            with open(extras_require, 'r') as fh:
+                extras_require = {'extras':[l.strip() for l in fh]}
         extras_require = extras_require or {}
 
         self.set_pype_modules(include_pype_module_names=include_pype_module_names,exclude_pype_module_names=exclude_pype_module_names)
@@ -269,12 +269,13 @@ class setup(object):
             ws = WriteSections(**self.sections)
             for lang in langs:
                 header_file = self.section_headers[lang]
+                # filename not in sections = sections are a dictionary
                 if 'filename' not in self.sections or newer_group([self.sections['filename']],header_file):
                     ws(filenames={lang:header_file})
 
         if pype_ext_modules:
-            # if Python extensions, need to compile **pypescript** wrappers
             write_sections()
+            # if Python extensions, need to compile **pypescript** wrappers
             pypelib_libraries = [(pypelib_wrappers['c'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.c')),
                                                         #'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include()]})]
                                                         #'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),
@@ -286,7 +287,16 @@ class setup(object):
             libraries = addfirst(libraries,*pypelib_libraries)
         else:
             write_sections(langs=['python'])
+        # to have section_names.py at the root directory
         data_files += [(name,[self.section_headers['python']])]
+
+        # to ensure this is also the case
+        class develop(_develop):
+
+            def run(_self):
+                shutil.copyfile(self.section_headers['python'],os.path.join(self.base_dir,'section_names.py'))
+                _develop.run(_self)
+
 
         _setup(name=name,
               version=version,
@@ -301,7 +311,7 @@ class setup(object):
               ext_modules=ext_modules,
               install_requires=install_requires,
               extras_require=extras_require,
-              cmdclass={'build_src':build_src},
+              cmdclass={'build_src':build_src,'develop':develop},
               data_files=data_files,
               libraries=libraries,
               **kwargs)

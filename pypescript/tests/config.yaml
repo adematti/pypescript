@@ -1,3 +1,12 @@
 hello:
   world: 42
-  configblock_load: config2.yaml
+  ${config2.yaml:}:
+  answer2: ${config2.yaml:answer.the}
+  localpath: ${path}
+  $module_name: hello
+
+testdict.a.b.c: 42
+
+path: myglobalpath
+mynumber: 42
+mylambda: "$(lambda i: (i + ${mynumber} + ${config2.yaml:answer.the}, ${hello.$module_name}))"

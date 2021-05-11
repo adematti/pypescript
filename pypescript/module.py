@@ -4,11 +4,10 @@ import os
 import sys
 import logging
 import importlib
-import ctypes
 
 from . import utils
 from .block import BlockMapping, DataBlock, SectionBlock
-from . import section_names
+from . import syntax, section_names
 from .config import ConfigBlock
 
 
@@ -41,7 +40,6 @@ class BaseModule(object):
     data_block : DataBlock
         Structure containing data exchanged between modules.
     """
-    _reserved_option_names = ['module_name','module_file','module_class','datablock_mapping','datablock_copy']
     logger = logging.getLogger('BaseModule')
 
     def __init__(self, name, options=None, config_block=None, data_block=None):
@@ -85,8 +83,8 @@ class BaseModule(object):
             for name,value in options.items():
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
-        self._datablock_mapping = BlockMapping(self.options.get_dict('datablock_mapping',None),sep='.')
-        self._datablock_copy = BlockMapping(self.options.get_dict('datablock_copy',None),sep='.')
+        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=None))
+        self._datablock_copy = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_copy,{}),sep=None))
 
     def set_data_block(self, data_block=None):
         """
@@ -180,10 +178,10 @@ class BaseModule(object):
         #if name in _all_loaded_modules:
         #    raise SyntaxError('You should NOT use the same module name in different pipelines. Create a new module, and use configblock_copy if useful!')
         options = options or {}
-        base_dir = options.get('base_dir','.')
-        module_file = options.get('module_file',None)
-        module_name = options.get('module_name',None)
-        module_class = options.get('module_class',None)
+        base_dir = options.get_string(syntax.module_base_dir,'.')
+        module_file = options.get_string(syntax.module_file,None)
+        module_name = options.get_string(syntax.module_name,None)
+        module_class = options.get_string(syntax.module_class,None)
         if module_file is None and module_name is None:
             raise ImportError('Failed importing module [{}]. You must provide a module file or a module name!'.format(name))
 
@@ -297,7 +295,15 @@ class ModuleTodo(object):
 
     def __call__(self):
         self.module.set_data_block(self.pipeline.pipe_block)
-        for func in self.func: func()
+        for func in self.func:
+            func()
+
+def _make_callable_array(array):
+
+    def func(i):
+        return array[i]
+
+    return func
 
 
 class BasePipeline(BaseModule):
@@ -309,7 +315,6 @@ class BasePipeline(BaseModule):
     modules : list
         List of modules.
     """
-    _reserved_option_names = BaseModule._reserved_option_names + ['modules','setup','execute','cleanup']
     logger = logging.getLogger('BasePipeline')
 
     def __init__(self, name='main', options=None, config_block=None, data_block=None, modules=None, setup=None, execute=None, cleanup=None):
@@ -343,47 +348,42 @@ class BasePipeline(BaseModule):
         self._datablock_bcast = []
         super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block)
         # modules will automatically inherit config_block, pipe_block, no need to reset set_config_block() and set_data_block()
-        modules += self.options.get_list('modules',default=[])
-        setup_todos += self.options.get_list('setup',default=[])
-        execute_todos += self.options.get_list('execute',default=[])
-        cleanup_todos += self.options.get_list('cleanup',default=[])
+        modules += self.options.get_list(syntax.modules,default=[])
+        setup_todos += self.options.get_list(syntax.setup,default=[])
+        execute_todos += self.options.get_list(syntax.execute,default=[])
+        cleanup_todos += self.options.get_list(syntax.cleanup,default=[])
         self.pipe_block = self.data_block.copy()
         self.set_todos(modules=modules,setup_todos=setup_todos,execute_todos=execute_todos,cleanup_todos=cleanup_todos)
-        self._iter = self.options.get('iter',None)
-        self.nprocs_per_task = self.options.get('nprocs_per_task',1)
-        if self._iter is not None and not isinstance(self._iter,list):
-            self._iter = eval(self._iter)
-        for block in ['configblock_iter','datablock_iter','datablock_iter_key']:
+        self._iter = self.options.get(syntax.iter,None)
+        self.nprocs_per_task = self.options.get_int(syntax.nprocs_per_task,1)
+        for block in [syntax.configblock_iter,syntax.datablock_iter,syntax.datablock_key_iter]:
             block_iter = {}
-            for key,value in self.options.get_dict(block,{}).items():
-                key = utils.split_section_name(key)
+            for key,value in syntax.collapse_sections(self.options.get_dict(block,{}),sep=None).items():
                 if len(key) != 2:
                     raise ValueError('Incorrect {} key: {}.'.format(block,key))
-                if value is None:
-                    value = lambda i: i
-                elif isinstance(value,list):
+                if isinstance(value,(list,tuple)):
+                    if self._iter is None:
+                        self._iter = range(len(value))
                     if not len(value) == len(self._iter):
                         raise ValueError('{} {} list must be of the same length as iter = {:d}.'.format(block,key,len(self._iter)))
-                    tab = value
-                    value = lambda i: tab[i]
-                else:
-                    value = eval(value)
-                    if not callable(value):
-                        raise TypeError('Incorrect {} value: {}.'.format(block,value))
-                        #value = lambda i: value[i]
+                    value = _make_callable_array(value)
+                elif not callable(value):
+                    raise TypeError('Incorrect {} value: {}.'.format(block,value))
                 block_iter[key] = value
-            setattr(self,'_{}'.format(block),block_iter)
+            setattr(self,'_{}'.format(block.__name__),block_iter)
 
         if self._iter is not None:
-            for key in self._datablock_iter_key:
+            for key in self._datablock_key_iter:
                 tmp = []
                 for i in self._iter:
-                    value = self._datablock_iter_key[key](i)
-                    value = utils.split_section_name(value)
+                    value = self._datablock_key_iter[key](i)
+                    value = syntax.split_sections(value)
+                    if len(value) == 1:
+                        value = (key[0],value)
                     if value in self._datablock_bcast:
                         raise ValueError('DataBlock key {} must appear only once for all iterations.'.format(value))
                     tmp.append(value)
-                self._datablock_iter_key[key] = tmp
+                self._datablock_key_iter[key] = tmp
                 self._datablock_bcast += tmp
         self.set_config_block(config_block=self.config_block)
 
@@ -394,13 +394,13 @@ class BasePipeline(BaseModule):
             for name,value in options.items():
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
-        self._datablock_mapping = BlockMapping(self.options.get_dict('datablock_mapping',None),sep='.')
-        datablock_copy = self.options.get('datablock_copy',None)
+        self._datablock_mapping = BlockMapping(self.options.get_dict(syntax.datablock_mapping,None),sep=syntax.section_sep)
+        datablock_copy = self.options.get_dict(syntax.datablock_copy,None)
         if datablock_copy is not None:
             if isinstance(datablock_copy,list):
                 datablock_copy = {key:key for key in datablock_copy}
             datablock_copy = {key:value if value is not None else key for key,value in datablock_copy.items()}
-        self._datablock_copy = BlockMapping(datablock_copy,sep='.')
+        self._datablock_copy = BlockMapping(datablock_copy,sep=syntax.section_sep)
         for key in self._datablock_bcast:
             self._datablock_copy[key] = key
         for module in self.modules:
@@ -467,9 +467,6 @@ class BasePipeline(BaseModule):
 
     def get_module_from_name(self, name):
         options = SectionBlock(self.config_block,name)
-        #if not any(key in options for key in ['module_name','module_file','module_class']):
-        #    options['module_name'] = 'pypescript.module'
-        #    options['module_class'] = 'BasePipeline'
         return BaseModule.from_filename(name=name,options=options,config_block=self.config_block,data_block=self.pipe_block)
 
     def setup(self):
@@ -502,12 +499,12 @@ class BasePipeline(BaseModule):
                     self.pipe_block = data_block.copy()
                     self.pipe_block['mpi','comm'] = tm.mpicomm
                     for key,value in self._configblock_iter.items():
-                        self.config_block[key] = task if value is None else value(task)
+                        self.config_block[key] = value(task)
                     for key,value in self._datablock_iter.items():
-                        self.pipe_block[key] = task if value is None else value(task)
+                        self.pipe_block[key] = value(task)
                     for todo in self.execute_todos:
                         todo()
-                    for keyg,keyl in self._datablock_iter_key.items():
+                    for keyg,keyl in self._datablock_key_iter.items():
                         key = keyl[itask]
                         pipe_block[key] = self.pipe_block[keyg]
                         #if tm.mpicomm.rank == 0:
@@ -562,11 +559,11 @@ class BasePipeline(BaseModule):
         :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
         """
         if name in ['setup','execute','cleanup']:
-            fun = object.__getattribute__(self,name)
+            func = object.__getattribute__(self,name)
 
             def wrapper(*args,**kwargs):
                 try:
-                    fun(*args,**kwargs)
+                    func(*args,**kwargs)
                 except Exception as exc:
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
 

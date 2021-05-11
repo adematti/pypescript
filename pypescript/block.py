@@ -7,7 +7,7 @@ import numpy as np
 
 from . import utils
 from .utils import BaseClass
-from . import section_names
+from . import syntax, section_names
 from .lib import block
 from .mpi import CurrentMPIComm
 
@@ -50,20 +50,13 @@ class BlockMapping(block.BlockMapping,BaseClass):
             If not ``None``, ``data`` string keys and values will be split using the separator ``sep``.
             For example, if ``sep == '.'``, the key ``section1.name1`` will be split into ``section1``, ``name1``.
         """
-        if data is None or isinstance(data, block.BlockMapping):
+        if data is None or isinstance(data,block.BlockMapping):
             super(BlockMapping,self).__init__(data=data)
             return
         data_ = {}
         for key,value in data.items():
-            if not ((isinstance(key,str) and isinstance(value,str)) or (isinstance(key,tuple) and isinstance(value,tuple))):
-                raise TypeError('In mapping {} = {}, both terms should be either string or tuple'.format(key,value))
             if sep is not None:
-                key,value = (utils.split_section_name(section_name) for section_name in [key,value])
-            if isinstance(key,tuple):
-                if not (len(key) == len(value) <= 2):
-                    raise TypeError('In mapping {} = {}, both terms should be same size (1 or 2)'.format(key,value))
-                if len(key) == 1:
-                    key,value = key[0],value[0]
+                key,value = (syntax.split_sections(section_name,sep=sep) for section_name in [key,value])
             data_[key] = value
         super(BlockMapping,self).__init__(data=data_)
 

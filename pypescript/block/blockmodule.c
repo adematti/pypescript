@@ -4,6 +4,17 @@
 #define DATABLOCK_MODULE
 #include "blockmodule.h"
 
+#define MAKE_TUPLE(__name)\
+  {\
+    Py_INCREF(__name);\
+    if (!PyTuple_Check(__name)) {\
+      __name = Py_BuildValue("(N)", __name);\
+      if (__name == NULL) {\
+        goto except;\
+      }\
+    }\
+  }\
+
 
 PyObject * PyDataBlock_Sections(PyDataBlock *self)
 {
@@ -168,18 +179,21 @@ finally:
 static int datablock_contains(PyObject *self, PyObject *args)
 {
   int toret = 1;
-  PyObject *section = NULL, *name = NULL;
+  MAKE_TUPLE(args);
 
-  if (PyTuple_Check(args)) {
-    if (!PyArg_ParseTuple(args, "OO", &section, &name)) goto except;
-    toret = PyDataBlock_HasValue((PyDataBlock *) self, section, name);
+  PyObject *section = NULL, *name = NULL;
+  if (PyTuple_Size(args) == 1) {
+    if (!PyArg_ParseTuple(args, "O", &section)) goto except;
+    toret = PyDataBlock_HasSection((PyDataBlock *) self, section);
     goto finally;
   }
-  toret = PyDataBlock_HasSection((PyDataBlock *) self, args);
+  if (!PyArg_ParseTuple(args, "OO", &section, &name)) goto except;
+  toret = PyDataBlock_HasValue((PyDataBlock *) self, section, name);
   goto finally;
 except:
   toret = -1;
 finally:
+  Py_XDECREF(args);
   return toret;
 }
 
@@ -197,8 +211,14 @@ PyObject * datablock_get(PyDataBlock *self, PyObject *args, PyObject *kwds)
 
 PyObject * PyDataBlock_GetItem(PyDataBlock *self, PyObject *key)
 {
-  if (PyTuple_Check(key)) return datablock_get(self, key, NULL);
-  return PyDataBlock_GetSection(self, key, NULL);
+  MAKE_TUPLE(key);
+  PyObject *toret = datablock_get(self, key, NULL);
+  goto finally;
+except:
+  toret = NULL;
+finally:
+  Py_XDECREF(key);
+  return toret;
 }
 
 PyObject * datablock_items(PyDataBlock *self, PyObject *args, PyObject *kwds)
@@ -386,21 +406,23 @@ int datablock_del(PyDataBlock *self, PyObject *args)
 static int datablock_assub(PyDataBlock *self, PyObject *key, PyObject *value)
 {
   int toret = 0;
+  MAKE_TUPLE(key);
   if (value == NULL) {
-    if (PyTuple_Check(key)) return datablock_del(self, key);
-    return PyDataBlock_DelSection(self, key);
-  }
-  PyObject *section = NULL, *name = NULL;
-  if (PyTuple_Check(key)) {
-    if (!PyArg_ParseTuple(key, "OO", &section, &name)) goto except;
-    toret = PyDataBlock_SetValue(self, section, name, value);
+    toret = datablock_del(self, key);
     goto finally;
   }
-  toret = PyDataBlock_SetSection(self, key, value);
+  PyObject *section = NULL, *name = NULL;
+  if (!PyArg_ParseTuple(key,"O|O", &section, &name)) goto except;
+  if (name == NULL) {
+    toret = PyDataBlock_SetSection(self, section, value);
+    goto finally;
+  }
+  toret = PyDataBlock_SetValue(self, section, name, value);
   goto finally;
 except:
   toret = -1;
 finally:
+  Py_XDECREF(key);
   return toret;
 }
 
