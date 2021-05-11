@@ -1,5 +1,5 @@
 cov:
-  module_name: template_lib.covariance
+  $module_name: template_lib.covariance
   yerr:
   - 1.0
   - 1.0
@@ -10,7 +10,7 @@ cov:
   - 1.0
   - 1.0
 data1:
-  module_name: template_lib.data_vector
+  $module_name: template_lib.data_vector
   y:
   - 1.0
   - 1.0
@@ -18,7 +18,7 @@ data1:
   - 1.0
   - 1.0
 data2:
-  module_name: template_lib.data_vector
+  $module_name: template_lib.data_vector
   y:
   - 1.0
   - 1.0
@@ -27,28 +27,28 @@ like:
   join:
   - like1
   - like2
-  module_class: JointGaussianLikelihood
-  module_name: template_lib.likelihood
-  modules:
+  $module_class: JointGaussianLikelihood
+  $module_name: template_lib.likelihood
+  $modules:
   - cov
 like1:
-  module_class: BaseLikelihood
-  module_name: template_lib.likelihood
-  modules:
+  $module_class: BaseLikelihood
+  $module_name: template_lib.likelihood
+  $modules:
   - data1
   - model1
 like2:
-  module_class: BaseLikelihood
-  module_name: template_lib.likelihood
-  modules:
+  $module_class: BaseLikelihood
+  $module_name: template_lib.likelihood
+  $modules:
   - data2
   - model2
 main:
-  modules:
+  $modules:
   - like
 model1:
-  module_class: FlatModel
-  module_name: template_lib.model
+  $module_class: FlatModel
+  $module_name: template_lib.model
 model2:
-  module_class: FlatModel
-  module_name: template_lib.model
+  $module_class: FlatModel
+  $module_name: template_lib.model

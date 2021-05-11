@@ -5,19 +5,24 @@ import copy
 
 keyword_re_pattern = re.compile('\$(.*?)$')
 replace_re_pattern = re.compile('\${(.*?)}')
+mapping_re_pattern = re.compile('\$\&{(.*?)}')
 eval_re_pattern = re.compile('\$\((.*?)\)$')
 section_sep = '.'
 
 
 _keyword_names = ['module_base_dir','module_name','module_file','module_class',\
-'datablock_mapping','datablock_copy','modules','setup','execute','cleanup',\
+'datablock_mapping','datablock_duplicate','modules','setup','execute','cleanup',\
 'iter','nprocs_per_task','configblock_iter','datablock_iter','datablock_key_iter']
 _keyword_cls = []
 keywords = {}
 
 
 for keyword in _keyword_names:
-    locals()[keyword] = keywords[keyword] = type(keyword,(object,),{})
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    locals()[keyword] = keywords[keyword] = type(keyword,(object,),{'__str__': __str__})()
     _keyword_cls.append(keywords[keyword])
 
 
@@ -239,6 +244,22 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        def callback(di):
+            toret = {}
+            for key,value in list(di.items()):
+                if isinstance(value,dict):
+                    tmp = callback(value)
+                    for key2,value2 in tmp.items():
+                        toret[(key,) + key2] = value2
+                else:
+                    key_mapping = self.decode_mapping(value)
+                    if key_mapping is not None:
+                        toret[(key,)] = key_mapping
+                        del di[key]
+            return toret
+
+        self.mapping = callback(self.data)
+
 
     def decode_keyword(self, word):
         if isinstance(word,str):
@@ -275,6 +296,12 @@ class Decoder(UserDict):
                 if replace is not None:
                     return copy.deepcopy(replace)
                 return toret
+
+    def decode_mapping(self, word):
+        if isinstance(word,str):
+            m = re.match(mapping_re_pattern,word)
+            if m:
+                return split_sections(m.group(1))
 
     def decode_eval(self, word):
 

@@ -11,7 +11,7 @@ doc/_build/
 **/build
 **/lib/*
 **/.DS_Store
-# **/section_names.py
+**/section_names.py
 
 # Unit test / coverage reports
 **/.coverage

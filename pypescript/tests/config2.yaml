@@ -1,5 +1,3 @@
 answer:
   to: 42
-  the: 44 #${the}
-
-#the: 44
+  the: 44

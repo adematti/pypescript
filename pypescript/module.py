@@ -84,7 +84,7 @@ class BaseModule(object):
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
         self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=None))
-        self._datablock_copy = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_copy,{}),sep=None))
+        self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{}),sep=None))
 
     def set_data_block(self, data_block=None):
         """
@@ -129,7 +129,7 @@ class BaseModule(object):
                 except Exception as exc:
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
 
-                for keyg,keyl in self._datablock_copy.items():
+                for keyg,keyl in self._datablock_duplicate.items():
                     if keyg in self.data_block:
                         self.data_block[keyl] = self.data_block[keyg]
 
@@ -176,7 +176,7 @@ class BaseModule(object):
             Structure containing data exchanged between modules. If ``None``, creates one.
         """
         #if name in _all_loaded_modules:
-        #    raise SyntaxError('You should NOT use the same module name in different pipelines. Create a new module, and use configblock_copy if useful!')
+        #    raise SyntaxError('You should NOT use the same module name in different pipelines. Create a new module, and use configblock_duplicate if useful!')
         options = options or {}
         base_dir = options.get_string(syntax.module_base_dir,'.')
         module_file = options.get_string(syntax.module_file,None)
@@ -370,7 +370,7 @@ class BasePipeline(BaseModule):
                 elif not callable(value):
                     raise TypeError('Incorrect {} value: {}.'.format(block,value))
                 block_iter[key] = value
-            setattr(self,'_{}'.format(block.__name__),block_iter)
+            setattr(self,'_{}'.format(block),block_iter)
 
         if self._iter is not None:
             for key in self._datablock_key_iter:
@@ -395,14 +395,14 @@ class BasePipeline(BaseModule):
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
         self._datablock_mapping = BlockMapping(self.options.get_dict(syntax.datablock_mapping,None),sep=syntax.section_sep)
-        datablock_copy = self.options.get_dict(syntax.datablock_copy,None)
-        if datablock_copy is not None:
-            if isinstance(datablock_copy,list):
-                datablock_copy = {key:key for key in datablock_copy}
-            datablock_copy = {key:value if value is not None else key for key,value in datablock_copy.items()}
-        self._datablock_copy = BlockMapping(datablock_copy,sep=syntax.section_sep)
+        datablock_duplicate = self.options.get_dict(syntax.datablock_duplicate,None)
+        if datablock_duplicate is not None:
+            if isinstance(datablock_duplicate,list):
+                datablock_duplicate = {key:key for key in datablock_duplicate}
+            datablock_duplicate = {key:value if value is not None else key for key,value in datablock_duplicate.items()}
+        self._datablock_duplicate = BlockMapping(datablock_duplicate,sep=syntax.section_sep)
         for key in self._datablock_bcast:
-            self._datablock_copy[key] = key
+            self._datablock_duplicate[key] = key
         for module in self.modules:
             self.config_block.update(module.config_block)
         for module in self.modules:
@@ -567,7 +567,7 @@ class BasePipeline(BaseModule):
                 except Exception as exc:
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
 
-                for keyg,keyl in self._datablock_copy.items():
+                for keyg,keyl in self._datablock_duplicate.items():
                     if keyg in self.pipe_block: # because not necessarily present at each step...
                         self.data_block[keyl] = self.pipe_block[keyg]
 

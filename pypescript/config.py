@@ -41,7 +41,7 @@ class ConfigBlock(DataBlock):
             block.DataBlock.__init__(self,data=filename)
             return
 
-        data = Decoder(filename=filename,string=string,parser=parser)
+        decoder = Decoder(filename=filename,string=string,parser=parser)
         # filter those entries which match the (section,name) format
-        data = {key:value for key,value in data.items() if isinstance(value,dict)}
-        block.DataBlock.__init__(self,data=data)
+        data = {key:value for key,value in decoder.items() if isinstance(value,dict)}
+        block.DataBlock.__init__(self,data=data,mapping=decoder.mapping)

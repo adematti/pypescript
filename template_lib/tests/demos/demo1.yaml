@@ -1,19 +1,19 @@
 main:
-  modules: [like]
+  $modules: [like]
 
 like:
-  module_name: template_lib.likelihood
-  module_class: GaussianLikelihood
-  modules: [data, model, cov]
+  $module_name: template_lib.likelihood
+  $module_class: GaussianLikelihood
+  $modules: [data, model, cov]
 
 data:
-  module_name: template_lib.data_vector
+  $module_name: template_lib.data_vector
   y: [1.0,1.0,1.0,1.0,1.0]
 
 model:
-  module_name: template_lib.model
-  module_class: FlatModel
+  $module_name: template_lib.model
+  $module_class: FlatModel
 
 cov:
-  module_name: template_lib.covariance
+  $module_name: template_lib.covariance
   yerr: [1.0,1.0,1.0,1.0,1.0]
