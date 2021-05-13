@@ -10,6 +10,7 @@ doc/_build/
 **/eggs
 **/build
 **/lib/*
+**/job_dir
 **/.DS_Store
 **/section_names.py
 

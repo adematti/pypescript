@@ -142,7 +142,7 @@ class DataBlock(block.DataBlock,BaseClass):
             super(DataBlock,self).__init__(data=new.data,mapping=new.mapping)
             return
 
-        if not isinstance(mapping,BlockMapping):
+        if mapping is not None and not isinstance(mapping,BlockMapping):
             mapping = BlockMapping(mapping)
 
         super(DataBlock,self).__init__(data=data,mapping=mapping)
@@ -251,7 +251,7 @@ class DataBlock(block.DataBlock,BaseClass):
         """
         if nocopy is None:
             nocopy = [section for section in section_names.nocopy if section in self]
-        return self.__class__(super(DataBlock,self).copy(nocopy=nocopy))
+        return self.__class__(super(DataBlock,self).copy(nocopy=nocopy),add_sections=[])
 
     def update(self, other, nocopy=None):
         """

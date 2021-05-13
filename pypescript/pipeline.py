@@ -398,7 +398,9 @@ class BatchPipeline(MPIPipeline):
             self.job_template = None
 
     def find_file_task(self, filetype, itask=None):
-        if filetype in ['config_block','data_block','save_data_block']:
+        if filetype in ['config_block']:
+            base, ext = filetype, 'yaml'
+        elif filetype in ['data_block','save_data_block']:
             base, ext = filetype, 'npy'
         elif filetype == 'job':
             base, ext = 'script', 'job'
@@ -415,10 +417,9 @@ class BatchPipeline(MPIPipeline):
         return len(self._datablock_duplicate)
 
     def execute_task(self, itask=0):
-
         config_block_fn = self.find_file_task('config_block',itask=itask)
         data_block_fn = self.find_file_task('data_block',itask=itask)
-        self.iconfig_block.save(config_block_fn)
+        self.iconfig_block.save_yaml(config_block_fn)
         self.ipipe_block.save(data_block_fn)
         command = 'pypescript {} --data-block-fn {}'.format(config_block_fn,data_block_fn)
         if self.is_datablock_saved:
@@ -431,16 +432,12 @@ class BatchPipeline(MPIPipeline):
             with open(template_fn,'w') as file:
                 file.write(template)
             command = '{} {}'.format(self.job_submit,template_fn)
-        import yaml
-        with open(config_block_fn.replace('.npy','.yaml'),'w') as file:
-            yaml.dump(self.iconfig_block.data,file,default_flow_style=None)
         self.log_info('Running {}'.format(command),rank=0)
         output = subprocess.run(command, capture_output=True, shell=True).stdout
         output = output.decode('utf-8')
         self.log_info('Output is:\n{}'.format(output),rank=0)
 
     def load_task(self, itask=0):
-
         data_block = None
         if self.is_datablock_saved:
             try:
@@ -459,7 +456,7 @@ class BatchPipeline(MPIPipeline):
         for key in set(self._datablock_duplicate) | set(self._datablock_key_iter) - set(self._datablock_bcast):
             duplicate[syntax.join_sections(key)] = syntax.join_sections(key)
         options[syntax.datablock_duplicate] = duplicate
-        self.iconfig_block[syntax.main] = options
+        self.iconfig_block.raw[syntax.main] = options
         self.ipipe_block = self.data_block.copy()
 
         iter = self._iter
@@ -468,7 +465,7 @@ class BatchPipeline(MPIPipeline):
         for task in iter:
 
             for key,value in self._configblock_iter.items():
-                self.iconfig_block[key] = value(task)
+                self.iconfig_block.raw[key] = value(task)
             for key,value in self._datablock_iter.items():
                 self.ipipe_block[key] = value(task)
 
