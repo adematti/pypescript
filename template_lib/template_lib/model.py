@@ -16,6 +16,7 @@ class FlatModel(BaseModule):
 
     def execute(self):
         a = self.data_block[section_names.parameters,'a']
+        #a = self.data_block.get(section_names.parameters,'a',0.)
         self.data_block[section_names.model,'y'] = np.full(self.size,a,dtype='f8')
         return 0
 

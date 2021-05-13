@@ -53,6 +53,7 @@ class BlockMapping(block.BlockMapping,BaseClass):
         if data is None or isinstance(data,block.BlockMapping):
             super(BlockMapping,self).__init__(data=data)
             return
+
         data_ = {}
         for key,value in data.items():
             if sep is not None:
@@ -76,6 +77,20 @@ class BlockMapping(block.BlockMapping,BaseClass):
         """Iter. TODO: implement in C."""
         if key not in self:
             self[key] = value
+
+    def copy(self):
+        """Return a shallow copy of ``self``, i.e. only the dictionary mapping to the stored items is copied, not the items themselves."""
+        return self.__class__(super(BlockMapping,self).copy())
+
+    def to_dict(self, sep=None):
+        """Return as dictionary of tuples, joined by ``sep`` if not ``None``."""
+        if sep is not None:
+            toret = {}
+            for key,value in self.data.items():
+                toret[syntax.join_sections(key,sep=sep)] = syntax.join_sections(value,sep=sep)
+        else:
+            toret = self.data.copy()
+        return toret
 
 
 class DataBlock(block.DataBlock,BaseClass):
@@ -122,7 +137,15 @@ class DataBlock(block.DataBlock,BaseClass):
             List of sections to be added to ``self``.
             If ``None``, defaults to :attr:`section_names.nocopy`.
         """
-        super(DataBlock,self).__init__(data=data, mapping=mapping if isinstance(mapping,BlockMapping) else BlockMapping(mapping))
+        if isinstance(data,str) and data.endswith(syntax.file_extension):
+            new = self.load(data)
+            super(DataBlock,self).__init__(data=new.data,mapping=new.mapping)
+            return
+
+        if not isinstance(mapping,BlockMapping):
+            mapping = BlockMapping(mapping)
+
+        super(DataBlock,self).__init__(data=data,mapping=mapping)
         if add_sections is None:
             add_sections = section_names.nocopy
         for section in add_sections:
@@ -228,7 +251,7 @@ class DataBlock(block.DataBlock,BaseClass):
         """
         if nocopy is None:
             nocopy = [section for section in section_names.nocopy if section in self]
-        return super(DataBlock,self).copy(nocopy=nocopy)
+        return self.__class__(super(DataBlock,self).copy(nocopy=nocopy))
 
     def update(self, other, nocopy=None):
         """
@@ -250,11 +273,28 @@ class DataBlock(block.DataBlock,BaseClass):
 
     def __getstate__(self):
         """Return this class state dictionary."""
-        return {'data':self.data,'mapping':self.mapping.__getstate__()}
+        data = {}
+        for (section,name),value in self.items():
+            if section not in data: data[section] = {}
+            if (section,name) == (section_names.mpi,'comm'):
+                continue
+            if hasattr(value,'__getstate__'):
+                data[section][name] = {'__class__':value.__class__,'__dict__':value.__getstate__()}
+            else:
+                data[section][name] = value
+        return {'data':data,'mapping':self.mapping.__getstate__()}
 
     def __setstate__(self, state):
         """Set the class state dictionary."""
-        super(DataBlock,self).__init__(data=state['data'],mapping=BlockMapping.from_state(state['mapping']))
+        data = {}
+        for section in state['data']:
+            data[section] = {}
+            for name,value in state['data'][section].items():
+                if isinstance(value,dict) and set(value.keys()) == {'__class__','__dict__'}:
+                    data[section][name] = value['__class__'].from_state(value['__dict__'])
+                else:
+                    data[section][name] = value
+        super(DataBlock,self).__init__(data=data,mapping=BlockMapping.from_state(state['mapping']))
 
     def __iter__(self, **kwargs):
         """Iter. TODO: implement in C."""
@@ -264,6 +304,12 @@ class DataBlock(block.DataBlock,BaseClass):
         """Iter. TODO: implement in C."""
         if (section,name) not in self:
             self.set(section,name,value)
+
+    def mpi_distribute(self, dests, mpicomm=None):
+        for key,value in self.items():
+            if hasattr(value,'mpi_distribute'):
+                self[key] = value.mpi_distribute(dests=dests,mpicomm=mpicomm)
+        return self
 
 
 def _make_getter(type_):

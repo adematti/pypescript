@@ -8,21 +8,27 @@ replace_re_pattern = re.compile('\${(.*?)}')
 mapping_re_pattern = re.compile('\$\&{(.*?)}')
 eval_re_pattern = re.compile('\$\((.*?)\)$')
 section_sep = '.'
-
+file_extension = '.npy'
+main = 'main'
+setup_function = 'setup'
+execute_function = 'execute'
+cleanup_function = 'cleanup'
 
 _keyword_names = ['module_base_dir','module_name','module_file','module_class',\
-'datablock_mapping','datablock_duplicate','modules','setup','execute','cleanup',\
-'iter','nprocs_per_task','configblock_iter','datablock_iter','datablock_key_iter']
+'datablock_set','datablock_mapping','datablock_duplicate','modules','setup','execute','cleanup',\
+'iter','nprocs_per_task','configblock_iter','datablock_iter','datablock_key_iter',\
+'mpiexec','hpc_job_dir','hpc_job_submit','hpc_job_template','hpc_job_options']
 _keyword_cls = []
 keywords = {}
 
 
 for keyword in _keyword_names:
 
-    def __str__(self):
-        return self.__class__.__name__
+    #def __str__(self):
+    #    return self.__class__.__name__
 
-    locals()[keyword] = keywords[keyword] = type(keyword,(object,),{'__str__': __str__})()
+    #locals()[keyword] = keywords[keyword] = type(keyword,(object,),{'__str__': __str__,'keyword':'${}'.format(keyword)})()
+    locals()[keyword] = keywords[keyword] = '${}'.format(keyword)
     _keyword_cls.append(keywords[keyword])
 
 
@@ -53,7 +59,7 @@ def yaml_parser(string):
     return data
 
 
-class PypescriptKeywordError(Exception):
+class KeywordError(Exception):
 
     def __init__(self, word):
         self.word = word
@@ -62,7 +68,7 @@ class PypescriptKeywordError(Exception):
         return 'Unknown keyword {}'.format(self.word)
 
 
-class PypescriptParserError(Exception):
+class ParserError(Exception):
 
     pass
 
@@ -70,9 +76,13 @@ class PypescriptParserError(Exception):
 def split_sections(word, sep=section_sep):
     if isinstance(word,str):
         return tuple(word.strip().split(sep))
-    if isinstance(word,tuple):
-        return word
+    if isinstance(word,(list,tuple)):
+        return tuple(word)
     raise TypeError('Wrong type {} for sections {}'.format(type(word),word))
+
+
+def join_sections(words, sep=section_sep):
+    return section_sep.join(words)
 
 
 def expand_sections(di, sep=section_sep):
@@ -125,24 +135,24 @@ from collections import UserDict
 
 class Decoder(UserDict):
 
-    def __init__(self, filename=None, string=None, parser=None):
+    def __init__(self, data=None, string=None, parser=None):
 
         self.parser = parser
         if parser is None:
             self.parser = yaml_parser
 
-        data = {}
+        data_ = {}
 
-        if isinstance(filename,str):
+        if isinstance(data,str):
             if string is None: string = ''
-            string += self.read_file(filename)
-        elif filename is not None:
-            data = dict(filename)
+            string += self.read_file(data)
+        elif data is not None:
+            data_ = dict(data)
 
         if string is not None:
-            data.update(self.parser(string))
+            data_.update(self.parser(string))
 
-        self.data = data
+        self.data = self.raw = data_
         self._cache = {}
         self.decode()
 
@@ -166,7 +176,7 @@ class Decoder(UserDict):
         try:
             toret = callback(self.data,*keys)
         except KeyError as exc:
-            raise PypescriptParserError('Required key "{}" does not exit'.format(section_sep.join(keys))) from exc
+            raise ParserError('Required key "{}" does not exit'.format(section_sep.join(keys))) from exc
         return toret
 
 
@@ -200,7 +210,7 @@ class Decoder(UserDict):
                 replace = self.decode_replace(key)
                 if replace is not None:
                     if value is not None:
-                        raise PypescriptParserError('Key is to be replaced, but value is not None in {}: {}'.format(key,value))
+                        raise ParserError('Key is to be replaced, but value is not None in {}: {}'.format(key,value))
                     toret = callback({**replace,**toret})
                     continue
                 replace = self.decode_replace(value)
@@ -269,7 +279,7 @@ class Decoder(UserDict):
                 try:
                     return keywords[word]
                 except KeyError:
-                    raise PypescriptKeywordError(word)
+                    raise KeywordError(word)
 
 
     def decode_replace(self, word):
@@ -291,7 +301,7 @@ class Decoder(UserDict):
                     else:
                         toret = new.search(*sections)
                 else:
-                    raise PypescriptParserError('Cannot parse {} as it contains multiple colons'.format(word))
+                    raise ParserError('Cannot parse {} as it contains multiple colons'.format(word))
                 replace = self.decode_replace(toret)
                 if replace is not None:
                     return copy.deepcopy(replace)
@@ -316,7 +326,7 @@ class Decoder(UserDict):
                     value = self.decode_replace(replace.group(1))
                     x = '__replace_{:d}__'.format(ireplace)
                     if x in words: # in case it's already in there
-                        raise PypescriptParserError('Please do not use {} in your expression'.format(x))
+                        raise ParserError('Please do not use {} in your expression'.format(x))
                     words = words.replace(replace.group(1),x)
                     dglobals[x] = value
                 word = eval(words,dglobals,{})

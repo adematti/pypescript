@@ -24,7 +24,7 @@ def test_demo1():
     graph_fn = os.path.join(demo_dir,'pipe1.ps')
 
     pipeline = BasePipeline(config_block=config_fn)
-    pipeline.plot_pipeline_graph(graph_fn)
+    #pipeline.plot_pipeline_graph(graph_fn)
     pipeline.setup()
     pipeline.data_block[section_names.parameters,'a'] = 0.
     pipeline.execute()
@@ -35,7 +35,7 @@ def test_demo1():
     pipeline.cleanup()
 
     graph_fn = os.path.join(demo_dir,'inheritance.ps')
-    BaseModule.plot_inheritance_graph(graph_fn,exclude=['FlatModel'])
+    #BaseModule.plot_inheritance_graph(graph_fn,exclude=['FlatModel'])
 
 
 def test_demo2():
@@ -44,7 +44,7 @@ def test_demo2():
     graph_fn = os.path.join(demo_dir,'pipe2.ps')
 
     pipeline = BasePipeline(config_block=config_fn)
-    pipeline.plot_pipeline_graph(graph_fn)
+    #pipeline.plot_pipeline_graph(graph_fn)
     pipeline.setup()
     pipeline.data_block[section_names.parameters,'a'] = 0.
     pipeline.execute()
@@ -68,7 +68,7 @@ def test_demo3():
         graph_fn = os.path.join(demo_dir,'pipe3.ps')
 
         pipeline = BasePipeline(config_block=config_fn)
-        pipeline.plot_pipeline_graph(graph_fn)
+        #pipeline.plot_pipeline_graph(graph_fn)
         pipeline.setup()
         pipeline.data_block[section_names.parameters,'a'] = 0.
         pipeline.execute()
@@ -94,7 +94,7 @@ def test_demo3b():
     like2 = BaseLikelihood(name='like2',modules=[data2,model2])
     like = JointGaussianLikelihood(name='like',join=[like1,like2],modules=[cov])
     pipeline = BasePipeline(modules=[like])
-    pipeline.plot_pipeline_graph(graph_fn)
+    #pipeline.plot_pipeline_graph(graph_fn)
     pipeline.setup()
     pipeline.data_block[section_names.parameters,'a'] = 0.
     pipeline.execute()
@@ -113,9 +113,20 @@ def test_demo4():
     assert pipeline.pipe_block[section_names.data,'ysave'].size == 3
 
 
+def test_demo5():
+    config_fn = os.path.join(demo_dir,'demo5.yaml')
+    pipeline = BasePipeline(config_block=config_fn)
+    pipeline.setup()
+    pipeline.execute()
+    pipeline.cleanup()
+
+
+
 if __name__ == '__main__':
 
     setup_logging()
+    test_demo5()
+    exit()
     test_section_names()
     with MemoryMonitor() as mem:
         for i in range(10):

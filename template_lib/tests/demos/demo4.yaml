@@ -6,8 +6,10 @@ like:
   $module_class: JointGaussianLikelihood
   join: [like1, like2]
   $modules: [cov]
+  $datablock_set:
+    parameters.a: 1.0
   $datablock_duplicate:
-    data.ysave: data.ysave
+    data.ysave:
 
 like1:
   $module_name: template_lib.likelihood
@@ -18,8 +20,7 @@ like2:
   $module_name: template_lib.likelihood
   $module_class: BaseLikelihood
   $modules: [data2, model2]
-  datablock_copy:
-    data.ysave: data.ysave
+  $datablock_duplicate: [data.ysave]
 
 data1:
   $module_name: template_lib.data_vector
@@ -32,7 +33,7 @@ model1:
 data2:
   $module_name: template_lib.data_vector
   y: [1.0,1.0,1.0]
-  datablock_copy:
+  $datablock_duplicate:
     data.y: data.ysave
 
 model2:

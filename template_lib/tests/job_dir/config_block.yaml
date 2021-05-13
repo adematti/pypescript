@@ -1,0 +1,43 @@
+batch:
+  $datablock_duplicate:
+    data: {ysave: null}
+  $execute: [like]
+  $iter: null
+  $module_class: BatchPipeline
+  $module_name: pypescript
+  $nprocs_per_task: 1
+cov:
+  $module_name: template_lib.covariance
+  yerr: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+data1:
+  $module_name: template_lib.data_vector
+  y: [1.0, 1.0, 1.0, 1.0, 1.0]
+data2:
+  $datablock_duplicate:
+    data: {y: data.ysave}
+  $module_name: template_lib.data_vector
+  y: [1.0, 1.0, 1.0]
+like:
+  $datablock_duplicate:
+    data: {ysave: null}
+  $datablock_set:
+    parameters: {a: 1.0}
+  $module_class: JointGaussianLikelihood
+  $module_name: template_lib.likelihood
+  $modules: [cov]
+  join: [like1, like2]
+like1:
+  $module_class: BaseLikelihood
+  $module_name: template_lib.likelihood
+  $modules: [data1, model1]
+like2:
+  $datablock_duplicate: [data.ysave]
+  $module_class: BaseLikelihood
+  $module_name: template_lib.likelihood
+  $modules: [data2, model2]
+main:
+  $datablock_duplicate: {data.ysave: data.ysave}
+  $datablock_set: {}
+  $execute: [like.setup, like.execute, like.cleanup]
+model1: {$module_class: FlatModel, $module_name: template_lib.model}
+model2: {$module_class: FlatModel, $module_name: template_lib.model}

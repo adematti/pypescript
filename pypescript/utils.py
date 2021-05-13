@@ -335,7 +335,7 @@ class ScatteredBaseClass(_BaseClass):
         return new
 
     @mpi.CurrentMPIComm.enable
-    def mpi_distribute(self, dests=None, mpicomm=None):
+    def mpi_distribute(self, dests, mpicomm=None):
         new = self.copy()
         new.mpicomm = mpicomm
         mpiroot = -1

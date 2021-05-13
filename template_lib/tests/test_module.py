@@ -3,7 +3,7 @@ import sys
 
 import numpy as np
 
-from pypescript import ConfigBlock, DataBlock, BaseModule
+from pypescript import ConfigBlock, DataBlock, BaseModule, syntax
 from pypescript.utils import setup_logging, MemoryMonitor
 
 module_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -18,26 +18,26 @@ def test_py(name='test'):
         module.cleanup()
 
     options = {}
-    options['module_file'] = os.path.join(module_dir,'template_lib','module_py','module.py')
-    options['module_class'] = 'PyModule'
+    options[syntax.module_file] = os.path.join(module_dir,'template_lib','module_py','module.py')
+    options[syntax.module_class] = 'PyModule'
     basic_run(name,options)
 
     options = {}
-    options['module_file'] = os.path.join(module_dir,'template_lib','module_py','module.py')
+    options[syntax.module_file] = os.path.join(module_dir,'template_lib','module_py','module.py')
     basic_run(name,options)
 
     sys.path.insert(0,os.path.dirname(module_dir))
     options = {}
-    options['module_name'] = 'template_lib.module_py.module'
+    options[syntax.module_name] = 'template_lib.module_py.module'
     basic_run(name,options)
 
     options = {}
-    options['module_name'] = 'template_lib.module_py.module'
-    options['module_class'] = 'PyModule'
+    options[syntax.module_name] = 'template_lib.module_py.module'
+    options[syntax.module_class] = 'PyModule'
     basic_run(name,options)
 
     options = {}
-    options['module_name'] = 'template_lib.module_py.other_module'
+    options[syntax.module_name] = 'template_lib.module_py.other_module'
     basic_run(name,options)
 
 
@@ -61,7 +61,7 @@ def test_extensions(name='test'):
 
     for lang in ['c','cpp','f90']:
         options = {}
-        options['module_name'] = 'template_lib.module_{}.module'.format(lang)
+        options[syntax.module_name] = 'template_lib.module_{}.module'.format(lang)
         module = BaseModule.from_filename(name=name,options=options)
         #basic_run_dynamic(library)
         with MemoryMonitor() as mem:
