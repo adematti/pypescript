@@ -6,6 +6,10 @@ import copy
 keyword_re_pattern = re.compile('\$(.*?)$')
 replace_re_pattern = re.compile('\${(.*?)}')
 mapping_re_pattern = re.compile('\$\&{(.*?)}')
+
+datablock_duplicate_re_pattern = re.compile('\$\[(.*?)\]')
+datablock_mapping_re_pattern = re.compile('\$\&\[(.*?)\]')
+
 eval_re_pattern = re.compile('\$\((.*?)\)$')
 section_sep = '.'
 file_extension = '.npy'
@@ -182,16 +186,17 @@ class Decoder(UserDict):
 
     def decode(self):
 
+        # first expand the dictionary .
         def callback(di):
 
             toret = {}
             for key,value in di.items():
-                if (not isinstance(key,str)) or re.match(replace_re_pattern,key):
+                if (not isinstance(key,str)) or re.match(replace_re_pattern,key) or re.match(datablock_duplicate_re_pattern,key):
                     toret[key] = value
                     continue
                 keys = split_sections(key)
                 if len(keys) > 1:
-                    key,value = keys[0],{section_sep.join(keys[1:]):value}
+                    key,value = keys[0],{join_sections(keys[1:]):value}
                 else:
                     key = keys[0]
                 if isinstance(value,dict):
@@ -224,6 +229,7 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+
         def callback(di):
             toret = {}
             for key,value in di.items():
@@ -235,6 +241,37 @@ class Decoder(UserDict):
                     toret[key] = decode
                     continue
                 toret[key] = value
+            return toret
+
+        self.data = callback(self.data)
+
+        def callback(di):
+            toret = {}
+            _duplicate, _mapping, _set = {}, {}, {}
+            for key,value in list(di.items()):
+                if isinstance(key,str):
+                    m = re.match(datablock_duplicate_re_pattern,key)
+                    if m:
+                        key_datablock = m.group(1)
+                        if isinstance(value,str):
+                            mv = re.match(datablock_duplicate_re_pattern,value)
+                            if mv:
+                                _duplicate[key_datablock] = mv.group(1)
+                                break
+                            mv = re.match(datablock_mapping_re_pattern,value)
+                            if mv:
+                                _mapping[key_datablock] = mv.group(1)
+                                break
+                        _set[key_datablock] = value
+                    elif isinstance(value,dict):
+                        toret[key] = callback(value)
+                    else:
+                        toret[key] = value
+            for di,kw in zip([_duplicate,_mapping,_set],[datablock_duplicate,datablock_mapping,datablock_set]):
+                if di:
+                    if kw not in toret:
+                        toret[kw] = {}
+                    toret[kw].update(di)
             return toret
 
         self.data = callback(self.data)
@@ -269,7 +306,6 @@ class Decoder(UserDict):
             return toret
 
         self.mapping = callback(self.data)
-
 
     def decode_keyword(self, word):
         if isinstance(word,str):

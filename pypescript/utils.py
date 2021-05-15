@@ -241,6 +241,7 @@ class _BaseClass(object):
         import copy
         return copy.deepcopy(self)
 
+
 @addclslogger
 class ScatteredBaseClass(_BaseClass):
     """

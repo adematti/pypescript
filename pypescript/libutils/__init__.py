@@ -196,7 +196,6 @@ class setup(object):
                 data_files=None,
                 libraries=None,
                 **kwargs):
-
         """
         Initialise :class:`setup` and call :func:`numpy.distutils.core.setup` to install the **pypescript** library.
         Most arguments are similar to those of :func:`numpy.distutils.core.setup`.
@@ -215,7 +214,6 @@ class setup(object):
             List of module names (w.r.t. ``base_dir``) to exclude.
             If ``None``, no module is excluded.
         """
-
         self.base_dir = base_dir
         self.section_dir = os.path.join('build','sections')
         if sections is not None:
