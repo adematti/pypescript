@@ -10,7 +10,7 @@ from . import utils
 class WriteSections(object):
     """Convenient class to write section header files for Python, C, C++ and Fortran."""
 
-    def __init__(self, filename=None, sections=None, nocopy=None, max_string_length=256):
+    def __init__(self, filename=None, sections=None, max_string_length=256):
         """
         Initialise :class:`WriteSections`.
 
@@ -22,14 +22,10 @@ class WriteSections(object):
         sections : list, default=None
             List of sections, if ``filename`` not provided.
 
-        nocopy : list, default=None
-            List of sections not to copy (see documentation of :meth:`~pypescript.block.DataBlock.copy`), if ``filename`` not provided.
-
         max_string_length : int, default=256
             Max length of (section, name) keys, used for Fortran.
         """
         self.sections = sections or []
-        self.nocopy = nocopy or {}
         if filename:
             self.read_sections(filename)
         self.filename = filename
@@ -38,7 +34,6 @@ class WriteSections(object):
             from pypescript import section_names
             sections = [s for s in dir(section_names) if s != 'nocopy' and not (s.startswith('__') and s.endswith('__'))]
             self.sections = sections + [s for s in self.sections if s not in sections]
-            self.nocopy = section_names.nocopy + [s for s in self.nocopy if s not in section_names.nocopy]
         except ImportError:
             # probably pypescript calling...
             pass
@@ -48,10 +43,7 @@ class WriteSections(object):
         with open(filename,'r') as file:
             sections = yaml.load(file,Loader=yaml.SafeLoader)
         for section in sections:
-            if isinstance(section,str):
-                self.sections.append(section)
-            else:
-                self.nocopy = section['nocopy']
+            self.sections.append(section)
 
     def header(self, comments='#'):
         """Return header to be added on top of section files."""
@@ -82,7 +74,6 @@ class WriteSections(object):
             file.write(self.header(comments='#'))
             for section in self.sections:
                 file.write("{} = '{}'\n".format(section,section))
-            file.write('nocopy = {}'.format(self.nocopy))
 
     def write_c(self, filename):
         """Write C section header file to ``filename``."""

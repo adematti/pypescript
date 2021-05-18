@@ -42,7 +42,7 @@ class BasePipeline(BaseModule):
     logger = logging.getLogger('BasePipeline')
     _available_options = BaseModule._available_options + [syntax.modules,syntax.setup,syntax.execute,syntax.cleanup]
 
-    def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, modules=None, setup=None, execute=None, cleanup=None):
+    def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, description=None, modules=None, setup=None, execute=None, cleanup=None):
         """
         Initalise :class:`BasePipeline`.
 
@@ -62,6 +62,9 @@ class BasePipeline(BaseModule):
         data_block : DataBlock, default=None
             Structure containing data exchanged between modules. If ``None``, creates one.
 
+        description : dict, default=None
+            Dictionary containing module description.
+
         modules : list, default=None
             List of modules, which will be completed by those in 'setup', 'execute' and 'cleanup' entries of options.
         """
@@ -71,7 +74,7 @@ class BasePipeline(BaseModule):
         cleanup_todos = cleanup or []
         self.modules = []
         #self._datablock_bcast = []
-        super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block)
+        super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block,description=description)
         # modules will automatically inherit config_block, pipe_block, no need to reset set_config_block() and set_data_block()
         modules += self.options.get_list(syntax.modules,default=[])
         setup_todos += self.options.get_list(syntax.setup,default=[])

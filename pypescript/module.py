@@ -44,7 +44,7 @@ class BaseModule(object):
     _available_options = [syntax.module_base_dir,syntax.module_name,syntax.module_file,syntax.module_class,
                             syntax.datablock_set,syntax.datablock_mapping,syntax.datablock_duplicate]
 
-    def __init__(self, name, options=None, config_block=None, data_block=None):
+    def __init__(self, name, options=None, config_block=None, data_block=None, description=None):
         """
         Initialise :class:`BaseModule`.
 
@@ -62,8 +62,12 @@ class BaseModule(object):
 
         data_block : DataBlock, default=None
             Structure containing data exchanged between modules. If ``None``, creates one.
+
+        description : dict, default=None
+            Dictionary containing module description.
         """
         self.name = name
+        self.description = description
         self.log_info('Init module {}.'.format(self),rank=0)
         self.set_config_block(options=options,config_block=config_block)
         self.set_data_block(data_block=data_block)
@@ -92,8 +96,8 @@ class BaseModule(object):
 
     def check_options(self):
         """Check provided options are mentioned in description file (if exists), else raises ``ConfigError``."""
-        if self._description is not None:
-            available_options = self._description['options']
+        if self.description is not None:
+            available_options = self.description['options']
             for name,value in self.options.items():
                 if name not in available_options and name not in self._available_options:
                     raise ConfigError('Option {} for module [{}] is not listed as available options in description file'.format(name,self.name))
@@ -227,11 +231,11 @@ class BaseModule(object):
             cls.log_info('Found description file {}.'.format(description_file))
             import yaml
             with open(description_file,'r') as file:
-                self._description = yaml.load(description_file,Loader=yaml.SafeLoader)
-            multiple_descriptions = isinstance(self._description,list)
+                description = yaml.load(description_file,Loader=yaml.SafeLoader)
+            multiple_descriptions = isinstance(description,list)
         else:
-            cls.log_info('Description file {} not found.'.format(description_file))
-            self._description = None
+            cls.log_info('No description file provided at {}.'.format(description_file))
+            description = None
             multiple_descriptions = False
 
         steps = [syntax.setup_function,syntax.execute_function,syntax.cleanup_function]
@@ -240,12 +244,12 @@ class BaseModule(object):
             return options.get('{}_function'.format(step),step)
 
         if module_class is None:
-            if self._description and not multiple_descriptions:
-                name_cls = self._description['name']
+            if description and not multiple_descriptions:
+                name_cls = description['name']
             else:
                 name_cls = utils.snake_to_pascal_case(base_module_name)
             if all(hasattr(module,get_func_name(step)) for step in steps):
-                if self._description and multiple_descriptions:
+                if description and multiple_descriptions:
                     raise ImportError('Description file {} describes multiple modules while there is only one in {}'.format(description_file,base_module_name))
                 new_cls = type(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
 
@@ -259,7 +263,7 @@ class BaseModule(object):
 
                 for step in steps:
                     setattr(new_cls,step,_make_func(module,step))
-                return new_cls(name,options=options,config_block=config_block,data_block=data_block)
+                return new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
                 #_all_loaded_modules[name] = toret
                 #return toret
             else:
@@ -270,9 +274,9 @@ class BaseModule(object):
             if hasattr(module,module_class):
                 if multiple_descriptions:
                     found = False
-                    for desc in self._description:
+                    for desc in description:
                         if desc['name'] == module_class:
-                            self._description = desc
+                            description = desc
                             found = True
                             break
                     if not found:
@@ -284,7 +288,7 @@ class BaseModule(object):
                     new_cls = type(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
                     for step in steps:
                         setattr(new_cls,step,getattr(mod_cls,get_func_name(step)))
-                    toret = new_cls(name,options=options,config_block=config_block,data_block=data_block)
+                    toret = new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
                 #_all_loaded_modules[name] = toret
                 return toret
             raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,base_module_name,name))

@@ -5,7 +5,8 @@ import logging
 
 from . import utils
 from .utils import BaseClass
-from . import syntax, section_names
+from . import syntax
+from . import section_names
 from .lib import block
 from .mpi import CurrentMPIComm
 
@@ -133,7 +134,7 @@ class DataBlock(block.DataBlock,BaseClass):
 
         add_sections: list, default=None
             List of sections to be added to ``self``.
-            If ``None``, defaults to :attr:`section_names.nocopy`.
+            If ``None``, defaults to :attr:`syntax.common_sections`.
         """
         if isinstance(data,str) and data.endswith(syntax.block_save_extension):
             new = self.load(data)
@@ -145,7 +146,7 @@ class DataBlock(block.DataBlock,BaseClass):
 
         super(DataBlock,self).__init__(data=data,mapping=mapping)
         if add_sections is None:
-            add_sections = section_names.nocopy
+            add_sections = syntax.common_sections
         for section in add_sections:
             if section not in self: self[section] = {}
         self.setdefault(section_names.mpi,'comm',CurrentMPIComm.get())
@@ -219,14 +220,14 @@ class DataBlock(block.DataBlock,BaseClass):
         nocopy : list, default=None
             List of sections to **not** copy (such that any change affecting in these sections of ``self`` will affect the
             returned copy as well).
-            If ``None``, defaults to :attr:`section_names.nocopy`.
+            If ``None``, defaults to :attr:`syntax.common_sections`.
 
         Note
         ----
         :attr:`mapping` instance is simply added to the returned :class:`DataBlock` instance, no copy is performed.
         """
         if nocopy is None:
-            nocopy = [section for section in section_names.nocopy if section in self]
+            nocopy = [section for section in syntax.common_sections if section in self]
         return self.__class__(super(DataBlock,self).copy(nocopy=nocopy),add_sections=[])
 
     def update(self, other, nocopy=None):
@@ -237,14 +238,14 @@ class DataBlock(block.DataBlock,BaseClass):
         ----------
         nocopy : list, default=None
             List of sections to **not** update (such that any change affecting in these sections of ``other`` will affect ``self`` as well.
-            If ``None``, defaults to :attr:`section_names.nocopy`.
+            If ``None``, defaults to :attr:`syntax.common_sections`.
 
         Note
         ----
         :attr:`mapping` instance is **not** updated.
         """
         if nocopy is None:
-            nocopy = [section for section in section_names.nocopy if section in self]
+            nocopy = [section for section in syntax.common_sections if section in self]
         return super(DataBlock,self).update(other,nocopy=nocopy)
 
     def __getstate__(self):
