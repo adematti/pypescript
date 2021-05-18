@@ -2,7 +2,7 @@
 
 import logging
 
-from .block import DataBlock
+from .block import BlockMapping, DataBlock
 from .lib import block
 from . import syntax
 from .syntax import Decoder
@@ -40,20 +40,20 @@ class ConfigBlock(DataBlock):
             Parser which turns a string into a dictionary.
         """
         if isinstance(data,ConfigBlock):
-            super(ConfigBlock,self).__init__(data=data.data,mapping=data.mapping)
+            block.DataBlock.__init__(self,data=data)
             self.raw = data.raw
             return
 
-        if isinstance(data,str) and data.endswith(syntax.file_extension):
+        if isinstance(data,str) and data.endswith(syntax.block_save_extension):
             new = self.load(data)
-            super(ConfigBlock,self).__init__(data=new.data,mapping=new.mapping,add_sections=[])
+            block.DataBlock.__init__(self,data=new)
             self.raw = new.data
             return
 
         decoder = Decoder(data=data,string=string,parser=parser)
         # filter those entries which match the (section,name) format
         data = {key:value for key,value in decoder.items() if isinstance(value,dict)}
-        super(ConfigBlock,self).__init__(data=data,mapping=decoder.mapping,add_sections=[])
+        block.DataBlock.__init__(self,data=data,mapping=BlockMapping(decoder.mapping))
         self.raw = decoder.raw
 
     def copy(self):
@@ -62,13 +62,20 @@ class ConfigBlock(DataBlock):
         new.raw = self.raw
         return new
 
+    def __repr__(self):
+        return 'ConfigBlock(data={}, mapping={})'.format(self.data,self.mapping)
+
+    def __str__(self):
+        return 'ConfigBlock(data={}, mapping={})'.format(self.data,self.mapping)
+
     def __getstate__(self):
         """Return this class state dictionary."""
         state = super(ConfigBlock,self).__getstate__()
-        state['raw'] = raw
+        state['raw'] = self.raw
+        return state
 
     def __setstate__(self, state):
-        super(DataBlock,self).__setstate__(state)
+        super(ConfigBlock,self).__setstate__(state)
         self.raw = state['raw']
 
     @savefile

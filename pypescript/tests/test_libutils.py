@@ -1,4 +1,4 @@
-from pypescript.libutils.generate_pype_module_doc import generate_doc_rst_table
+from pypescript.libutils import generate_rst_doc_table
 
 
 def test_rst_doc():
@@ -7,8 +7,9 @@ def test_rst_doc():
     'compile': {'sources': ['module.c','module2.c'], 'include_dirs': [], 'library_dirs': [], 'libraries': [], 'extra_compile_args': [], 'extra_link_args': []},
     'long_description': 'Explain here in finer details what your module is about',
     'parameters': {'answer': 'Answer to the Ultimate Question of Life, the Universe, and Everything'}, 'inputs': [], 'outputs': []}
-    print(generate_doc_rst_table(doc))
+    print(generate_rst_doc_table(doc))
 
 
 if __name__ == '__main__':
+
     test_rst_doc()

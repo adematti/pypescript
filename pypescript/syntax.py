@@ -12,14 +12,16 @@ datablock_mapping_re_pattern = re.compile('\$\&\[(.*?)\]')
 
 eval_re_pattern = re.compile('\$\((.*?)\)$')
 section_sep = '.'
-file_extension = '.npy'
+block_save_extension = '.npy'
+description_file_extension = '.yaml'
 main = 'main'
 setup_function = 'setup'
 execute_function = 'execute'
 cleanup_function = 'cleanup'
 
 _keyword_names = ['module_base_dir','module_name','module_file','module_class',\
-'datablock_set','datablock_mapping','datablock_duplicate','modules','setup','execute','cleanup',\
+'datablock_set','datablock_mapping','datablock_duplicate',
+'modules','setup','execute','cleanup',\
 'iter','nprocs_per_task','configblock_iter','datablock_iter','datablock_key_iter',\
 'mpiexec','hpc_job_dir','hpc_job_submit','hpc_job_template','hpc_job_options']
 _keyword_cls = []

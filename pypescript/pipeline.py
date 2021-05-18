@@ -40,6 +40,7 @@ class BasePipeline(BaseModule):
         List of modules.
     """
     logger = logging.getLogger('BasePipeline')
+    _available_options = BaseModule._available_options + [syntax.modules,syntax.setup,syntax.execute,syntax.cleanup]
 
     def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, modules=None, setup=None, execute=None, cleanup=None):
         """
@@ -255,7 +256,8 @@ class MPIPipeline(BasePipeline):
     modules : list
         List of modules.
     """
-    logger = logging.getLogger('BasePipeline')
+    logger = logging.getLogger('MPIPipeline')
+    _available_options = BasePipeline._available_options + [syntax.iter,syntax.nprocs_per_task,syntax.configblock_iter,syntax.datablock_iter,syntax.datablock_key_iter]
 
     def __init__(self, *args, **kwargs):
 
@@ -375,6 +377,7 @@ class BatchError(Exception):
 class BatchPipeline(MPIPipeline):
 
     logger = logging.getLogger('BatchPipeline')
+    _available_options = MPIPipeline._available_options + [syntax.mpiexec,syntax.hpc_job_dir,syntax.hpc_job_submit,syntax.hpc_job_template,syntax.hpc_job_options]
 
     def __init__(self, *args, **kwargs):
 

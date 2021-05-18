@@ -27,6 +27,61 @@ def exception_handler(exc_type, exc_value, exc_traceback):
     os._exit(1)
 
 
+def is_of_type(value, types):
+    """
+    Check type of ``value``.
+
+    Parameters
+    ----------
+    value : object
+        Value to check type of.
+
+    types : list, tuple, string, type or class
+        Types to check the return value of :meth:`DataBlock.get` against.
+        If list or tuple, check whether any of the proposed types matches.
+        If a type is string, will search for the corresponding builtin type.
+
+    Returns
+    -------
+    oftype : bool
+        Whether ``value`` is of any of ``types``.
+    """
+    convert = {'string':'str'}
+
+    def get_type_from_str(type_):
+        return __builtins__.get(type_,None)
+
+    def get_nptype_from_str(type_):
+        return {'bool':np.bool_,'int':np.integer,'float':np.floating,'str':np.string_}.get(type_,None)
+
+    if not isinstance(types,(tuple,list)):
+        types = (types,)
+
+    toret = False
+    for type_ in types:
+        if isinstance(type_,str):
+            type_ = convert.get(type_,type_)
+            type_py = get_type_from_str(type_)
+            if type_py is not None:
+                if not isinstance(value,type_py):
+                    continue
+            else:
+                match = re.match('(.*)_array',type_)
+                if match is None:
+                    continue
+                type_ = convert.get(match.group(1),match.group(1))
+                if isinstance(value,np.ndarray):
+                    type_np = get_nptype_from_str(type_)
+                    if type_np is None or not np.issubdtype(value.dtype,type_np):
+                        continue
+                else:
+                    continue
+        elif not isinstance(value,type_):
+            continue
+        toret = True
+    return toret
+
+
 def setup_logging(level=logging.INFO, stream=sys.stdout, filename=None, filemode='w', **kwargs):
     """
     Set up logging.

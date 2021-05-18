@@ -3,7 +3,7 @@
 from . import utils
 
 
-def generate_doc_rst_table(rows, max_line_len=80):
+def generate_rst_doc_table(rows, max_line_len=80):
     """
     Generate rst table from module documentation ``rows``.
 
@@ -145,7 +145,7 @@ def generate_pype_modules_rst_doc(**kwargs):
     rst = ''
     for module_dir,full_name,description_file,description in utils.walk_pype_modules(**kwargs):
         rst += 'Description of module :mod:`{}`:\n\n'.format(full_name)
-        rst += generate_doc_rst_table(description) + '\n\n'
+        rst += generate_rst_table(description) + '\n\n'
     return rst
 
 

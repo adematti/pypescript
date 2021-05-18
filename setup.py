@@ -18,7 +18,8 @@ setup(name='pypescript',
     license='GPLv3',
     packages=['pypescript','pypescript.libutils'],
     ext_modules=[extension],
-    package_data={base_dir: ['wrappers/*','block/*']},
-    install_requires='requirements.txt',
+    package_data={base_dir:['wrappers/*','block/*']},
+    install_requires=['pyyaml','numpy','mpi4py'],
+    extras_require={'extras':['pytest','psutil']},
     entry_points={'console_scripts': ['pypescript=pypescript.__main__:main','pypescript_section_names=pypescript.setuppype.generate_section_names:main']}
     )

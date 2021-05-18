@@ -8,7 +8,7 @@ import importlib
 from . import utils
 from .block import BlockMapping, DataBlock, SectionBlock
 from . import syntax, section_names
-from .config import ConfigBlock
+from .config import ConfigBlock, ConfigError
 
 
 def _import_pygraphviz():
@@ -41,6 +41,8 @@ class BaseModule(object):
         Structure containing data exchanged between modules.
     """
     logger = logging.getLogger('BaseModule')
+    _available_options = [syntax.module_base_dir,syntax.module_name,syntax.module_file,syntax.module_class,
+                            syntax.datablock_set,syntax.datablock_mapping,syntax.datablock_duplicate]
 
     def __init__(self, name, options=None, config_block=None, data_block=None):
         """
@@ -86,6 +88,22 @@ class BaseModule(object):
         self._datablock_set = syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),sep=None)
         self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=syntax.section_sep),sep=syntax.section_sep)
         self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{}),sep=syntax.section_sep),sep=syntax.section_sep)
+        self.check_options()
+
+    def check_options(self):
+        """Check provided options are mentioned in description file (if exists), else raises ``ConfigError``."""
+        if self._description is not None:
+            available_options = self._description['options']
+            for name,value in self.options.items():
+                if name not in available_options and name not in self._available_options:
+                    raise ConfigError('Option {} for module [{}] is not listed as available options in description file'.format(name,self.name))
+                types = available_options[name].get('type',None)
+                if types is not None:
+                    if not utils.is_of_type(value,types):
+                        raise ConfigError('Option {} for module [{}] is not of correct type ({}, while allowed types are {})'.format(name,self.name,type(value),types))
+            for name in available_options:
+                if 'default' in available_options:
+                    self.options.setdefault(name,available_options['default'])
 
     def set_data_block(self, data_block=None):
         """
@@ -196,14 +214,25 @@ class BaseModule(object):
             filename = os.path.join(base_dir,module_file)
             cls.log_info('Importing module {} [{}].'.format(filename,name),rank=0)
             basename = os.path.basename(filename)
-            name_mod = os.path.splitext(basename)[0]
-            spec = importlib.util.spec_from_file_location(name_mod,filename)
+            base_module_name = os.path.splitext(basename)[0]
+            spec = importlib.util.spec_from_file_location(base_module_name,filename)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         else:
             cls.log_info('Importing module {} [{}].'.format(module_name,name),rank=0)
             module = importlib.import_module(module_name)
-            name_mod = syntax.split_sections(module_name)[-1]
+            base_module_name = module_name.split('.')[-1]
+        description_file = os.path.join(os.path.dirname(module.__file__),base_module_name + syntax.description_file_extension)
+        if os.path.isfile(description_file):
+            cls.log_info('Found description file {}.'.format(description_file))
+            import yaml
+            with open(description_file,'r') as file:
+                self._description = yaml.load(description_file,Loader=yaml.SafeLoader)
+            multiple_descriptions = isinstance(self._description,list)
+        else:
+            cls.log_info('Description file {} not found.'.format(description_file))
+            self._description = None
+            multiple_descriptions = False
 
         steps = [syntax.setup_function,syntax.execute_function,syntax.cleanup_function]
 
@@ -211,8 +240,13 @@ class BaseModule(object):
             return options.get('{}_function'.format(step),step)
 
         if module_class is None:
-            name_cls = utils.snake_to_pascal_case(name_mod)
+            if self._description and not multiple_descriptions:
+                name_cls = self._description['name']
+            else:
+                name_cls = utils.snake_to_pascal_case(base_module_name)
             if all(hasattr(module,get_func_name(step)) for step in steps):
+                if self._description and multiple_descriptions:
+                    raise ImportError('Description file {} describes multiple modules while there is only one in {}'.format(description_file,base_module_name))
                 new_cls = type(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
 
                 def _make_func(module,step):
@@ -234,6 +268,15 @@ class BaseModule(object):
 
         if module_class is not None:
             if hasattr(module,module_class):
+                if multiple_descriptions:
+                    found = False
+                    for desc in self._description:
+                        if desc['name'] == module_class:
+                            self._description = desc
+                            found = True
+                            break
+                    if not found:
+                        cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file))
                 mod_cls = getattr(module,module_class)
                 if issubclass(mod_cls,cls):
                     toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block)
@@ -244,9 +287,7 @@ class BaseModule(object):
                     toret = new_cls(name,options=options,config_block=config_block,data_block=data_block)
                 #_all_loaded_modules[name] = toret
                 return toret
-            else:
-                raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,name_mod,name))
-
+            raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,base_module_name,name))
 
     @classmethod
     def plot_inheritance_graph(cls, filename, exclude=None):

@@ -118,6 +118,15 @@ def test_block():
     block['block','name_a'] = block
     block['block','name_b'] = block
 
+
+    block = DataBlock()
+    block['a','b'] = 2
+    assert block.get_int('a','b') == 2
+    with pytest.raises(KeyError):
+        block.get_string('a','a')
+    with pytest.raises(TypeError):
+        block.get_string('a','b')
+
     #block = {}
     #block['block','name_a'] = block
     #test = {}
@@ -137,6 +146,8 @@ def test_config():
     'localpath': 'myglobalpath', syntax.module_name: 'hello'}, 'testdict': {'a':{'b':{'c': 42}}}, 'world': {}}
     config2 = ConfigBlock(config)
     assert id(config2.data) == id(config.data)
+
+    assert str(ConfigBlock.from_state(config.__getstate__()).data) == str(config.data)
 
 
 if __name__ == '__main__':

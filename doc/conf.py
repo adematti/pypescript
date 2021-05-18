@@ -65,7 +65,7 @@ exclude_patterns = ['build', '**.ipynb_checkpoints']
 html_static_path = []
 
 git_repo = 'https://github.com/adematti/pypescript.git'
-git_root = 'https://github.com/adematti/pypescript/blob/master/'
+git_root = 'https://github.com/adematti/pypescript/blob/main/'
 docker_root = 'https://hub.docker.com/r/adematti/pypescript/'
 
 extlinks = {'root': (git_root + '%s',''),
@@ -88,7 +88,7 @@ ultimate_replacements = {
 }
 
 
-from setuppype.generate_pype_module_doc import write_pype_modules_rst_doc
+from libutils import write_pype_modules_rst_doc
 
 def setup(app):
     write_pype_modules_rst_doc(os.path.join('api','modules.rst'), base_dir=lib_dir)

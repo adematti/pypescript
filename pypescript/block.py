@@ -3,8 +3,6 @@
 import re
 import logging
 
-import numpy as np
-
 from . import utils
 from .utils import BaseClass
 from . import syntax, section_names
@@ -74,7 +72,7 @@ class BlockMapping(block.BlockMapping,BaseClass):
         return iter(self.keys())
 
     def setdefault(self, key, value):
-        """Iter. TODO: implement in C."""
+        """Set default value. TODO: implement in C."""
         if key not in self:
             self[key] = value
 
@@ -137,12 +135,12 @@ class DataBlock(block.DataBlock,BaseClass):
             List of sections to be added to ``self``.
             If ``None``, defaults to :attr:`section_names.nocopy`.
         """
-        if isinstance(data,str) and data.endswith(syntax.file_extension):
+        if isinstance(data,str) and data.endswith(syntax.block_save_extension):
             new = self.load(data)
             super(DataBlock,self).__init__(data=new.data,mapping=new.mapping)
             return
 
-        if mapping is not None and not isinstance(mapping,BlockMapping):
+        if not isinstance(mapping,BlockMapping):
             mapping = BlockMapping(mapping)
 
         super(DataBlock,self).__init__(data=data,mapping=mapping)
@@ -152,10 +150,10 @@ class DataBlock(block.DataBlock,BaseClass):
             if section not in self: self[section] = {}
         self.setdefault(section_names.mpi,'comm',CurrentMPIComm.get())
 
-    def get_type(self, section, name, type_, *args, **kwargs):
+    def get_type(self, section, name, types, *args, **kwargs):
         """
         Wrapper around :meth:`DataBlock.get` which further checks the output type
-        and returns a ``TypeError`` if the result is not a ``type_`` instance.
+        and returns a ``TypeError`` if the result is not an instance of any of ``types``.
 
         Parameters
         ----------
@@ -165,9 +163,10 @@ class DataBlock(block.DataBlock,BaseClass):
         name : string
             Element name. ``section``, ``name`` is the complete ``DataBlock`` entry.
 
-        type_ : string, type or class
-            Type to check the return value of :meth:`DataBlock.get` against.
-            If string, will search for the corresponding builtin type.
+        types : list, tuple, string, type or class
+            Types to check the return value of :meth:`DataBlock.get` against.
+            If list or tuple, check whether any of the proposed types matches.
+            If a type is string, will search for the corresponding builtin type.
 
         args : list
             Other arguments to :meth:`DataBlock.get`.
@@ -178,7 +177,8 @@ class DataBlock(block.DataBlock,BaseClass):
         Returns
         -------
         value : object
-            ``type_`` instance or default value if provided.
+            Return value in ``self`` if it exists and is of the correct type (else raises a ``TypeError``),
+            else default value if provided (else raises a ``KeyError``).
 
         Raises
         ------
@@ -193,34 +193,10 @@ class DataBlock(block.DataBlock,BaseClass):
             return self.get(section,name,*args,**kwargs)
 
         value = self.get(section,name)
-        convert = {'string':'str'}
 
-        def get_type_from_str(type_):
-            return __builtins__.get(type_,None)
+        if not utils.is_of_type(value, types):
+            raise TypeError('Wrong type for "{}" in section [{}] (accepted: {}).'.format(name,section,types))
 
-        def get_nptype_from_str(type_):
-            return {'bool':np.bool_,'int':np.integer,'float':np.floating,'str':np.string_}.get(type_,None)
-
-        error = TypeError('Wrong type for "{}" in section [{}].'.format(name,section))
-        if isinstance(type_,str):
-            type_ = convert.get(type_,type_)
-            type_py = get_type_from_str(type_)
-            if type_py is not None:
-                if not isinstance(value,type_py):
-                    raise error
-            else:
-                match = re.match('(.*)_array',type_)
-                if match is None:
-                    raise error
-                type_ = convert.get(match.group(1),match.group(1))
-                if isinstance(value,np.ndarray):
-                    type_np = get_nptype_from_str(type_)
-                    if type_np is None or not np.issubdtype(value.dtype,type_np):
-                        raise error
-                else:
-                    raise error
-        elif not isinstance(value,type_):
-            raise error
         return value
 
     def set_mapping(self, mapping=None):
@@ -274,14 +250,15 @@ class DataBlock(block.DataBlock,BaseClass):
     def __getstate__(self):
         """Return this class state dictionary."""
         data = {}
-        for (section,name),value in self.items():
-            if section not in data: data[section] = {}
-            if (section,name) == (section_names.mpi,'comm'):
-                continue
-            if hasattr(value,'__getstate__'):
-                data[section][name] = {'__class__':value.__class__,'__dict__':value.__getstate__()}
-            else:
-                data[section][name] = value
+        for section in self.sections():
+            data[section] = {}
+            for name, value in self[section].items():
+                if (section,name) == (section_names.mpi,'comm'):
+                    continue
+                if hasattr(value,'__getstate__'):
+                    data[section][name] = {'__class__':value.__class__,'__dict__':value.__getstate__()}
+                else:
+                    data[section][name] = value
         return {'data':data,'mapping':self.mapping.__getstate__()}
 
     def __setstate__(self, state):
@@ -301,7 +278,7 @@ class DataBlock(block.DataBlock,BaseClass):
         return iter(self.keys(**kwargs))
 
     def setdefault(self, section, name, value):
-        """Iter. TODO: implement in C."""
+        """Set default value. TODO: implement in C."""
         if (section,name) not in self:
             self.set(section,name,value)
 
@@ -376,6 +353,11 @@ class SectionBlock(object):
     def keys(self):
         """Return names in the :attr:``block`` section."""
         return (name for section,name in self.block.keys(section=self.section))
+
+    def setdefault(self, name, value):
+        """Set default value. TODO: implement in C."""
+        if name not in self:
+            self.block.set(section,name,value)
 
 
 def _make_getter(name):

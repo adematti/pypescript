@@ -1,10 +1,13 @@
 import os
 import sys
 
+import yaml
 import numpy as np
 
 from pypescript import ConfigBlock, DataBlock, BaseModule, syntax
 from pypescript.utils import setup_logging, MemoryMonitor
+from pypescript.libutils import generate_rst_doc_table
+
 
 module_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
@@ -69,8 +72,16 @@ def test_extensions(name='test'):
                 basic_run(module)
 
 
+def test_doc():
+    with open(os.path.join(module_dir,'template_lib','module_f90','module.yaml'),'r') as file:
+        description = yaml.load(file,Loader=yaml.SafeLoader)
+    doc = generate_rst_doc_table(description)
+    print(doc)
+
+
 if __name__ == '__main__':
 
     setup_logging()
     test_py()
-    test_extensions()
+    #test_extensions()
+    #test_doc()
