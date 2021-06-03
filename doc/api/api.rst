@@ -31,16 +31,20 @@ utils module
   :members:
   :show-inheritance:
 
-setuppype package
------------------
-.. automodule:: pypescript.setuppype.setuppype
+libutils package
+----------------
+.. automodule:: pypescript.libutils.setup
   :members:
   :show-inheritance:
 
-.. automodule:: pypescript.setuppype.generate_pype_module_doc
+.. automodule:: pypescript.libutils.generate_pype_module_doc
   :members:
   :show-inheritance:
 
-.. automodule:: pypescript.setuppype.utils
+.. automodule:: pypescript.libutils.module_description
+  :members:
+  :show-inheritance:
+
+.. automodule:: pypescript.libutils.utils
   :members:
   :show-inheritance:

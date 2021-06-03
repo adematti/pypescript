@@ -176,12 +176,15 @@ def MPIBroadcast(func):
     @CurrentMPIComm.enable
     def wrapper(cls, self, *args, mpiroot=0, mpicomm=None, **kwargs):
         new = cls.__new__(cls)
+        isscattered = self is not None and self.is_mpi_scattered()
+        if isscattered: self.mpi_gather()
         #if self.mpistate == CurrentMPIState.BROADCAST:
         #    raise MPIError('{} instance already broadcast!'.format(cls.__name__))
         new.mpiroot = mpiroot
         new.mpicomm = mpicomm
         func(new,self,*args,**kwargs)
         new.mpistate = CurrentMPIState.BROADCAST
+        if isscattered: self.mpi_scatter()
         return new
 
     return wrapper
@@ -577,7 +580,7 @@ def gather_array(data, root=0, mpicomm=None):
         return None
 
     if not isinstance(data, np.ndarray):
-        raise ValueError('`data` must by numpy array in gather_array')
+        raise ValueError('`data` must be numpy array in gather_array')
 
     # need C-contiguous order
     if not data.flags['C_CONTIGUOUS']:
@@ -612,7 +615,7 @@ def gather_array(data, root=0, mpicomm=None):
             recvbuffer = None
 
         for name in dtypes[0].names:
-            d = gather_array(data[name], mpicomm, root=root)
+            d = gather_array(data[name], root=root, mpicomm=mpicomm)
             if root is Ellipsis or mpicomm.rank == root:
                 recvbuffer[name] = d
 
@@ -629,7 +632,8 @@ def gather_array(data, root=0, mpicomm=None):
     else:
         bad_shape = None; bad_dtype = None
 
-    bad_shape, bad_dtype = mpicomm.bcast((bad_shape, bad_dtype),root=root)
+    if root is not Ellipsis:
+        bad_shape, bad_dtype = mpicomm.bcast((bad_shape, bad_dtype),root=root)
 
     if bad_shape:
         raise ValueError('mismatch between shape[1:] across ranks in gather_array')
@@ -705,6 +709,7 @@ def broadcast_array(data, root=0, mpicomm=None):
     else:
         isscalar = None
     isscalar = mpicomm.bcast(isscalar, root=root)
+
     if isscalar:
         return mpicomm.bcast(data, root=root)
 

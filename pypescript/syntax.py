@@ -14,14 +14,14 @@ datablock_duplicate_re_pattern = re.compile('\$\[(.*?)\]')
 datablock_mapping_re_pattern = re.compile('\$\&\[(.*?)\]')
 
 eval_re_pattern = re.compile('\$\((.*?)\)$')
+
 section_sep = '.'
 block_save_extension = '.npy'
-description_file_extension = '.yaml'
 main = 'main'
 setup_function = 'setup'
 execute_function = 'execute'
 cleanup_function = 'cleanup'
-common_sections = [section_names.common,section_names.mpi]
+common_sections = [section_names.common]
 
 _keyword_names = ['module_base_dir','module_name','module_file','module_class',\
 'datablock_set','datablock_mapping','datablock_duplicate',
@@ -83,12 +83,16 @@ class ParserError(Exception):
     pass
 
 
-def split_sections(word, sep=section_sep):
+def split_sections(word, sep=section_sep, default_section=None):
     if isinstance(word,str):
-        return tuple(word.strip().split(sep))
-    if isinstance(word,(list,tuple)):
-        return tuple(word)
-    raise TypeError('Wrong type {} for sections {}'.format(type(word),word))
+        toret = tuple(word.strip().split(sep))
+    elif isinstance(word,(list,tuple)):
+        toret = tuple(word)
+    else:
+        raise TypeError('Wrong type {} for sections {}'.format(type(word),word))
+    if len(toret) == 1 and default_section is not None:
+        toret = (default_section,) + toret
+    return toret
 
 
 def join_sections(words, sep=section_sep):

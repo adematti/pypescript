@@ -106,7 +106,7 @@ def setup_logging(level=logging.INFO, stream=sys.stdout, filename=None, filemode
     # Cannot provide stream and filename kwargs at the same time to logging.basicConfig, so handle different cases
     # Thanks to https://stackoverflow.com/questions/30861524/logging-basicconfig-not-creating-log-file-when-i-run-in-pycharm
     if isinstance(level,str):
-        level = {'info':logging.INFO,'debug':logging.DEBUG,'warning':logging.WARNING}[level]
+        level = {'info':logging.INFO,'debug':logging.DEBUG,'warning':logging.WARNING}[level.lower()]
     for handler in logging.root.handlers:
         logging.root.removeHandler(handler)
 
@@ -149,7 +149,8 @@ def savefile(func):
         dirname = os.path.dirname(filename)
         mkdir(dirname)
         self.log_info('Saving to {}.'.format(filename),rank=0)
-        return func(self,filename,*args,**kwargs)
+        toret = func(self,filename,*args,**kwargs)
+        self.mpicomm.Barrier()
     return wrapper
 
 
@@ -274,6 +275,10 @@ class _BaseClass(object):
         if hasattr(self,'attrs'): state['attrs'] = self.attrs
         return state
 
+    @property
+    def mpiattrs(self):
+        return {'mpicomm':self.mpicomm,'mpistate':self.mpistate,'mpiroot':self.mpiroot}
+
     def is_mpi_root(self):
         return self.mpicomm.rank == self.mpiroot
 
@@ -286,10 +291,23 @@ class _BaseClass(object):
     def is_mpi_broadcast(self):
         return self.mpistate == mpi.CurrentMPIState.BROADCAST
 
-    def copy(self):
+    def __copy__(self):
         """Return shallow copy of ``self``."""
         new = self.__class__.__new__(self.__class__)
         new.__dict__.update(self.__dict__)
+        return new
+
+    def copy(self):
+        return self.__copy__()
+
+    def __deepcopy__(self, memo):
+        import copy
+        new = self.copy()
+        for key,value in self.__dict__.items():
+            if key in ['mpicomm','_mpicomm']:
+                new.__dict__[key] = value
+            else:
+                new.__dict__[key] = copy.deepcopy(value,memo)
         return new
 
     def deepcopy(self):
@@ -346,7 +364,7 @@ class ScatteredBaseClass(_BaseClass):
     @mpi.CurrentMPIComm.enable
     def load(cls, filename, mpiroot=0, mpistate=mpi.CurrentMPIState.GATHERED, mpicomm=None):
         """Load class from disk."""
-        cls.log_info('Loading {}.'.format(filename))
+        cls.log_info('Loading {}.'.format(filename),rank=0)
         new = cls.__new__(cls)
         new.mpicomm = mpicomm
         new.mpiroot = mpiroot
@@ -368,11 +386,30 @@ class ScatteredBaseClass(_BaseClass):
     @classmethod
     @mpi.CurrentMPIComm.enable
     def mpi_collect(cls, self=None, sources=None, mpicomm=None):
+        """
+        Return new instance corresponding to ``self`` on larger ``mpicomm``.
+
+        Parameters
+        ----------
+        self : object, None
+            Instance to spread on ``mpicomm``.
+
+        sources : list, None
+            Ranks of processes of ``mpicomm`` where ``self`` lives.
+            If ``None``, takes the ranks of processes where ``self`` is not ``None``.
+
+        mpicomm : MPI communicator
+            New mpi communicator.
+
+        Returns
+        -------
+        new : object
+        """
         new = cls.__new__(cls)
         new.mpicomm = mpicomm
         if sources is None:
-            issource = self.mpicomm.rank if self is not None else -1
-            sources = [rank for rank in new.mpicomm.allgather(issource) if rank >= 0]
+            source_rank = self.mpicomm.rank if self is not None else -1
+            sources = [rank for rank in new.mpicomm.allgather(source_rank) if rank >= 0]
         new.mpistate = new.mpicomm.bcast(self.mpistate if new.mpicomm.rank == sources[0] else None,root=sources[0])
         mpiroot = -1
         if (new.mpicomm.rank in sources) and self.is_mpi_root():
@@ -392,8 +429,28 @@ class ScatteredBaseClass(_BaseClass):
 
     @mpi.CurrentMPIComm.enable
     def mpi_distribute(self, dests, mpicomm=None):
+        """
+        Return new instance corresponding to``self`` on smaller ``mpicomm``.
+
+        Parameters
+        ----------
+        self : object, None
+            Instance to concentrate on ``mpicomm``.
+
+        dests : list, None
+            Ranks of processes of :attrs:`mpicomm` where to send ``self`` lives.
+            If ``None``, takes the ranks of processes where ``self`` is not ``None``.
+
+        mpicomm : MPI communicator
+            New mpi communicator.
+
+        Returns
+        -------
+        new : object, None
+        """
         new = self.copy()
         new.mpicomm = mpicomm
+
         mpiroot = -1
         if self.mpicomm.rank == dests[0]:
             mpiroot = new.mpicomm.rank

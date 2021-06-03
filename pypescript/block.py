@@ -287,6 +287,7 @@ class DataBlock(block.DataBlock,BaseClass):
         for key,value in self.items():
             if hasattr(value,'mpi_distribute'):
                 self[key] = value.mpi_distribute(dests=dests,mpicomm=mpicomm)
+        self['mpi','comm'] = mpicomm
         return self
 
 
@@ -357,8 +358,7 @@ class SectionBlock(object):
 
     def setdefault(self, name, value):
         """Set default value. TODO: implement in C."""
-        if name not in self:
-            self.block.set(section,name,value)
+        self.block.setdefault(self.section,name,value)
 
 
 def _make_getter(name):

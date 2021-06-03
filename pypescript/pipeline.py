@@ -207,10 +207,13 @@ class BasePipeline(BaseModule):
                     func(*args,**kwargs)
                 except Exception as exc:
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
-
                 for keyg,keyl in self._datablock_duplicate.items():
-                    if keyg in self.pipe_block: # because not necessarily present at each step...
-                        self.data_block[keyl] = self.pipe_block[keyg]
+                    if keyl in self.data_block:
+                        #print('db',self.name,keyg,keyl,id(self.data_block[keyl]))
+                        self.data_block[keyg] = self.data_block[keyl]
+                    elif keyl in self.pipe_block: # because not necessarily present at each step...
+                        #print('pb',self.name,keyg,keyl,id(self.pipe_block[keyl]))
+                        self.data_block[keyg] = self.pipe_block[keyl]
 
             return wrapper
 
@@ -262,9 +265,8 @@ class MPIPipeline(BasePipeline):
     logger = logging.getLogger('MPIPipeline')
     _available_options = BasePipeline._available_options + [syntax.iter,syntax.nprocs_per_task,syntax.configblock_iter,syntax.datablock_iter,syntax.datablock_key_iter]
 
-    def __init__(self, *args, **kwargs):
-
-        super(MPIPipeline,self).__init__(*args,**kwargs)
+    def set_config_block(self, options=None, config_block=None):
+        super(MPIPipeline,self).set_config_block(options=options,config_block=config_block)
         self._iter = self.options.get(syntax.iter,None)
         if self._iter is not None and np.ndim(self._iter) == 0:
             # most certainly the number of iterations
@@ -295,7 +297,7 @@ class MPIPipeline(BasePipeline):
                     value = self._datablock_key_iter[key](i)
                     value = syntax.split_sections(value)
                     if len(value) == 1:
-                        value = (key[0],value)
+                        value = (key[0],) + value
                     if value in self._datablock_bcast:
                         raise ConfigError('DataBlock key {} must appear only once for all iterations.'.format(value))
                     tmp.append(value)
@@ -319,7 +321,7 @@ class MPIPipeline(BasePipeline):
 
                 for itask,task in tm.iterate(list(enumerate(self._iter))):
                     self.pipe_block = data_block.copy()
-                    self.pipe_block['mpi','comm'] = tm.mpicomm
+                    #self.pipe_block['mpi','comm'] = tm.mpicomm
                     for key,value in self._configblock_iter.items():
                         self.config_block[key] = value(task)
                     for key,value in self._datablock_iter.items():
@@ -392,6 +394,9 @@ class BatchPipeline(MPIPipeline):
             if todo.module in setup_modules or todo.module in cleanup_modules:
                 raise ConfigError('{} requires module [{}] to run entirely (setup, execute, cleanup) in the pipeline execute step.'.format(self.__class__.__name__,todo.module.name))
             self.module_names.append(todo.module.name)
+
+    def set_config_block(self, options=None, config_block=None):
+        super(BatchPipeline,self).set_config_block(options=options,config_block=config_block)
         self.job_dir = self.options.get_string(syntax.hpc_job_dir,'job_dir')
         self.mpiexec = self.options.get_string(syntax.mpiexec,'mpiexec')
         template_fn = self.options.get_string(syntax.hpc_job_template,None)

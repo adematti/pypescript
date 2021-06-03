@@ -6,7 +6,7 @@ def test_rst_doc():
     'description': 'Template C module', 'url': '', 'licence': '', 'cite': [], 'bibtex': [], 'requirements': [],
     'compile': {'sources': ['module.c','module2.c'], 'include_dirs': [], 'library_dirs': [], 'libraries': [], 'extra_compile_args': [], 'extra_link_args': []},
     'long_description': 'Explain here in finer details what your module is about',
-    'parameters': {'answer': 'Answer to the Ultimate Question of Life, the Universe, and Everything'}, 'inputs': [], 'outputs': []}
+    'options': {'answer': 'Answer to the Ultimate Question of Life, the Universe, and Everything'}, 'inputs': [], 'outputs': []}
     print(generate_rst_doc_table(doc))
 
 

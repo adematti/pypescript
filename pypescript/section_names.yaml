@@ -1,3 +1,2 @@
 - common
 - mpi
-- nocopy: [common, mpi]

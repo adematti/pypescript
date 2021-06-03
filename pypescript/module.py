@@ -5,10 +5,11 @@ import sys
 import logging
 import importlib
 
-from . import utils
 from .block import BlockMapping, DataBlock, SectionBlock
-from . import syntax, section_names
 from .config import ConfigBlock, ConfigError
+from .libutils import ModuleDescription
+from . import syntax, section_names
+from . import utils
 
 
 def _import_pygraphviz():
@@ -17,6 +18,16 @@ def _import_pygraphviz():
     except ImportError as e:
         raise ImportError('Please install pygraphviz: see https://github.com/pygraphviz/pygraphviz/blob/master/INSTALL.txt') from e
     return pgv
+
+
+def mimport(module_name, module_file=None, module_class=None, name=None, data_block=None, options={}):
+    if name is None:
+        name = module_name.split('.')[-1]
+    options = options or {}
+    options[syntax.module_name] = module_name
+    options[syntax.module_file] = module_file
+    options[syntax.module_class] = module_class
+    return BaseModule.from_filename(name=name,data_block=data_block,options=options)
 
 
 #_all_loaded_modules = {}
@@ -71,6 +82,7 @@ class BaseModule(object):
         self.log_info('Init module {}.'.format(self),rank=0)
         self.set_config_block(options=options,config_block=config_block)
         self.set_data_block(data_block=data_block)
+        self._cache = {}
 
     def set_config_block(self, options=None, config_block=None):
         """
@@ -99,15 +111,21 @@ class BaseModule(object):
         if self.description is not None:
             available_options = self.description['options']
             for name,value in self.options.items():
-                if name not in available_options and name not in self._available_options:
+                if name in self._available_options:
+                    continue
+                if name not in available_options:
                     raise ConfigError('Option {} for module [{}] is not listed as available options in description file'.format(name,self.name))
                 types = available_options[name].get('type',None)
                 if types is not None:
                     if not utils.is_of_type(value,types):
                         raise ConfigError('Option {} for module [{}] is not of correct type ({}, while allowed types are {})'.format(name,self.name,type(value),types))
-            for name in available_options:
-                if 'default' in available_options:
-                    self.options.setdefault(name,available_options['default'])
+                choices = available_options[name].get('choices',None)
+                if choices is not None:
+                    if value not in choices:
+                        raise ConfigError('Option {} for module [{}] is not allowed ({}, while allowed choices are {})'.format(name,self.name,value,choices))
+            for name,options in available_options.items():
+                if 'default' in options:
+                    self.options.setdefault(name,options['default'])
 
     def set_data_block(self, data_block=None):
         """
@@ -157,8 +175,8 @@ class BaseModule(object):
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
 
                 for keyg,keyl in self._datablock_duplicate.items():
-                    if keyg in self.data_block:
-                        self.data_block[keyl] = self.data_block[keyg]
+                    if keyl in self.data_block:
+                        self.data_block[keyg] = self.data_block[keyl]
 
             return wrapper
 
@@ -169,7 +187,7 @@ class BaseModule(object):
         return '{} [{}]'.format(self.__class__.__name__,self.name)
 
     @classmethod
-    def from_filename(cls, name, options=None, config_block=None, data_block=None):
+    def from_filename(cls, name='module', options=None, config_block=None, data_block=None):
         """
         Create :class:`BaseModule`-type module from either module name or module file.
         The imported module can contain the following functions:
@@ -206,8 +224,8 @@ class BaseModule(object):
         #    raise SyntaxError('You should NOT use the same module name in different pipelines. Create a new module, and use configblock_duplicate if useful!')
         options = options or {}
         base_dir = options.get(syntax.module_base_dir,'.')
-        module_file = options.get(syntax.module_file,None)
         module_name = options.get(syntax.module_name,None)
+        module_file = options.get(syntax.module_file,None)
         module_class = options.get(syntax.module_class,None)
         if module_file is None and module_name is None:
             raise ImportError('Failed importing module [{}]. You must provide a module file or a module name'.format(name))
@@ -218,24 +236,22 @@ class BaseModule(object):
             filename = os.path.join(base_dir,module_file)
             cls.log_info('Importing module {} [{}].'.format(filename,name),rank=0)
             basename = os.path.basename(filename)
-            base_module_name = os.path.splitext(basename)[0]
+            #base_module_name = os.path.splitext(basename)[0]
             spec = importlib.util.spec_from_file_location(base_module_name,filename)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         else:
             cls.log_info('Importing module {} [{}].'.format(module_name,name),rank=0)
             module = importlib.import_module(module_name)
-            base_module_name = module_name.split('.')[-1]
-        description_file = os.path.join(os.path.dirname(module.__file__),base_module_name + syntax.description_file_extension)
-        if os.path.isfile(description_file):
-            cls.log_info('Found description file {}.'.format(description_file))
-            import yaml
-            with open(description_file,'r') as file:
-                description = yaml.load(description_file,Loader=yaml.SafeLoader)
+            #base_module_name = module_name.split('.')[-1]
+        base_module_name = module.__name__.split('.')[-1]
+        description_file = ModuleDescription.filename_from_module(module)
+        description = ModuleDescription.from_module(module)
+        if description is not None:
+            cls.log_info('Found description file {}.'.format(description_file),rank=0)
             multiple_descriptions = isinstance(description,list)
         else:
-            cls.log_info('No description file provided at {}.'.format(description_file))
-            description = None
+            cls.log_info('No description file provided at {}.'.format(description_file),rank=0)
             multiple_descriptions = False
 
         steps = [syntax.setup_function,syntax.execute_function,syntax.cleanup_function]
@@ -243,11 +259,18 @@ class BaseModule(object):
         def get_func_name(step):
             return options.get('{}_function'.format(step),step)
 
+        import inspect
+        all_cls = inspect.getmembers(module,inspect.isclass)
+        all_name_cls = [c[0] for c in all_cls]
+
         if module_class is None:
             if description and not multiple_descriptions:
                 name_cls = description['name']
             else:
-                name_cls = utils.snake_to_pascal_case(base_module_name)
+                if len(all_cls) == 1:
+                    name_cls = all_name_cls[0]
+                else:
+                    name_cls = utils.snake_to_pascal_case(base_module_name)
             if all(hasattr(module,get_func_name(step)) for step in steps):
                 if description and multiple_descriptions:
                     raise ImportError('Description file {} describes multiple modules while there is only one in {}'.format(description_file,base_module_name))
@@ -271,7 +294,7 @@ class BaseModule(object):
                 module_class = name_cls
 
         if module_class is not None:
-            if hasattr(module,module_class):
+            if module_class in all_name_cls:
                 if multiple_descriptions:
                     found = False
                     for desc in description:
@@ -280,7 +303,7 @@ class BaseModule(object):
                             found = True
                             break
                     if not found:
-                        cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file))
+                        cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file),rank=0)
                 mod_cls = getattr(module,module_class)
                 if issubclass(mod_cls,cls):
                     toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block)

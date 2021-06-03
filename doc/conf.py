@@ -91,7 +91,7 @@ ultimate_replacements = {
 from libutils import write_pype_modules_rst_doc
 
 def setup(app):
-    write_pype_modules_rst_doc(os.path.join('api','modules.rst'), base_dir=lib_dir)
+    write_pype_modules_rst_doc(os.path.join('api','modules.rst'),base_dir=lib_dir)
     app.add_config_value('ultimate_replacements', {}, True)
     app.connect('source-read',_replace)
 

@@ -21,8 +21,11 @@ compile:
 
 long_description: Explain here in finer details what your module is about
 
-parameters:
-  answer: Answer to the Ultimate Question of Life, the Universe, and Everything
+options:
+  answer:
+    type: int
+    default: 42
+    description: Answer to the Ultimate Question of Life, the Universe, and Everything
 
 # provide here the list of module inputs
 inputs:

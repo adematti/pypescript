@@ -2,7 +2,7 @@
 
 from .block import DataBlock, SectionBlock
 from .config import ConfigBlock, ConfigError
-from .module import BaseModule
+from .module import BaseModule, mimport
 from .pipeline import BasePipeline, MPIPipeline, BatchPipeline
 from .utils import setup_logging
 from . import section_names

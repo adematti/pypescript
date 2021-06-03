@@ -70,18 +70,6 @@ def module_file_name(full_name, base_dir='.'):
     return os.path.join(base_dir,full_name.replace('.',os.sep))
 
 
-def check_module_description(description, description_file):
-    """
-    Check wether the file ``description_file`` containing ``description`` is a **pypescript** module description file.
-    ``description`` should contain ``name`` matching ``description_file`` base name to be considered as a module description file.
-    """
-    if 'name' not in description:
-        return False
-    if description['name'] != os.path.splitext(os.path.basename(description_file))[0]:
-        return False
-    return True
-
-
 def walk_pype_modules(base_dir='.', include_pype_module_names=None, exclude_pype_module_names=None):
     """
     Walk through **pypescript** modules and yield (module directory, module full name (w.r.t. ``base_dir``), description file name, desciption dictionary).
@@ -99,28 +87,32 @@ def walk_pype_modules(base_dir='.', include_pype_module_names=None, exclude_pype
         List of module names (w.r.t. ``base_dir``) or regex to exclude.
         If ``None``, no module is excluded.
     """
+    from .module_description import ModuleDescription
+
     exclude_pype_module_names = exclude_pype_module_names or []
     extensions,modules,requirements = [],[],set()
 
     for module_dir, dirs, files in os.walk(base_dir, followlinks=True):
-        description_files = [os.path.join(module_dir,file) for file in files if file.endswith('.yaml')]
+        description_files = [os.path.join(module_dir,file) for file in files if file.endswith(ModuleDescription._file_extension)]
         for description_file in description_files:
-            with open(description_file,'r') as file:
-                description = yaml.load(file,Loader=yaml.SafeLoader)
-            if not check_module_description(description,description_file):
+            if not ModuleDescription.isinstance(description_file):
                 continue
-            full_name = module_full_name(os.path.join(module_dir,description['name']),base_dir=base_dir)
-            if include_pype_module_names is not None:
-                toinclude = False
-                for include in include_pype_module_names:
-                    if re.match(include,full_name):
-                        toinclude = True
+            descriptions = ModuleDescription.load(description_file)
+            if not isinstance(descriptions,list):
+                descriptions = [descriptions]
+            for description in descriptions:
+                full_name = module_full_name(os.path.join(module_dir,description['name']),base_dir=base_dir)
+                if include_pype_module_names is not None:
+                    toinclude = False
+                    for include in include_pype_module_names:
+                        if re.match(include,full_name):
+                            toinclude = True
+                            break
+                    if not toinclude: continue
+                toexclude = False
+                for exclude in exclude_pype_module_names:
+                    if re.match(exclude,full_name):
+                        toexclude = True
                         break
-                if not toinclude: continue
-            toexclude = False
-            for exclude in exclude_pype_module_names:
-                if re.match(exclude,full_name):
-                    toexclude = True
-                    break
-            if toexclude: continue
-            yield module_dir, full_name, description_file, description
+                if toexclude: continue
+                yield module_dir, full_name, description_file, description

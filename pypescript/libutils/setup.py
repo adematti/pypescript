@@ -18,7 +18,7 @@ from numpy.distutils.core import setup as _setup
 from distutils.dep_util import newer_group
 import mpi4py
 
-from .generate_section_names import WriteSections
+from .generate_section_names import SectionNames
 from .generate_pymodule_csource import write_csource
 
 from . import utils
@@ -216,14 +216,16 @@ class setup(object):
         self.section_dir = os.path.join('build','sections')
         if sections is not None:
             if isinstance(sections,str):
-                sections = {'filename':sections}
-            self.sections = sections
+                self.sections = SectionNames.load(sections)
+            else:
+                self.sections = SectionNames(sections)
         else:
-            self.sections = {'filename':os.path.join(self.base_dir,'section_names.yaml')}
-        self.section_headers = {}
-        self.section_headers['python'] = os.path.join(self.section_dir,'section_names.py')
-        self.section_headers['c'] = os.path.join(self.section_dir,'section_names.h')
-        self.section_headers['fortran'] = os.path.join(self.section_dir,'section_names_f90.fi')
+            self.sections = SectionNames.load(os.path.join(self.base_dir,'section_names.yaml'))
+        self.section_fns = []
+        self.section_pyfn = os.path.join(self.section_dir,'section_names.py')
+        self.section_fns.append(self.section_pyfn)
+        self.section_fns.append(os.path.join(self.section_dir,'section_names.h'))
+        self.section_fns.append(os.path.join(self.section_dir,'section_names.fi'))
         os.environ['CC'] = os.environ.get('MPICC','mpicc')
         os.environ['CXX'] = os.environ.get('MPICCX','mpicxx')
         os.environ['F90'] = os.environ.get('MPIF90','mpif90')
@@ -257,18 +259,10 @@ class setup(object):
         ext_modules += pype_ext_modules
         install_requires = list(set(install_requires)) # remove duplicates
 
-        def write_sections(langs=None):
-            if langs is None:
-                langs = self.section_headers.keys()
-            ws = WriteSections(**self.sections)
-            for lang in langs:
-                header_file = self.section_headers[lang]
-                # filename not in sections = sections are a dictionary
-                if 'filename' not in self.sections or newer_group([self.sections['filename']],header_file):
-                    ws(filenames={lang:header_file})
-
         if pype_ext_modules:
-            write_sections()
+            for section_fn in self.section_fns:
+                if not hasattr(self.sections,'filename') or newer_group([self.sections.filename],section_fn):
+                    self.sections.save(section_fn)
             # if Python extensions, need to compile **pypescript** wrappers
             pypelib_libraries = [(pypelib_wrappers['c'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.c')),
                                                         #'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include()]})]
@@ -280,15 +274,15 @@ class setup(object):
                                                         'extra_f90_compile_args':['-ffree-line-length-none']})]
             libraries = addfirst(libraries,*pypelib_libraries)
         else:
-            write_sections(langs=['python'])
+            self.sections.save(self.section_pyfn)
         # to have section_names.py at the root directory
-        data_files += [(name,[self.section_headers['python']])]
+        data_files += [(name,[self.section_pyfn])]
 
         # to ensure this is also the case
         class develop(_develop):
 
             def run(_self):
-                shutil.copyfile(self.section_headers['python'],os.path.join(self.base_dir,'section_names.py'))
+                shutil.copyfile(self.section_pyfn,os.path.join(self.base_dir,os.path.basename(self.section_pyfn)))
                 _develop.run(_self)
 
         _setup(name=name,
@@ -344,9 +338,9 @@ class setup(object):
                                             description_file=description_file, **compile_kwargs)
                     extensions.append(extension)
                 else:
-                    modules.append(name)
+                    modules.append(full_name)
             else:
-                modules.append(name)
+                modules.append(full_name)
         self.pype_modules = modules
         self.pype_ext_modules = extensions
         self.description_files = description_files

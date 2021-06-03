@@ -3,21 +3,12 @@ version: '1.0.0'
 date: 03/01/2021
 author: Arnaud de Mattia
 maintainer: Arnaud de Mattia
-description: Template C module
+description: Template Python module
 url: ''
 licence: ''
 cite: []
 bibtex: []
 requirements: []
-compile:
-  sources: [module.c]
-  include_dirs: []
-  library_dirs: []
-  libraries: []
-  extra_objects: []
-  extra_compile_args: []
-  extra_link_args: []
-  depends: []
 
 long_description: Explain here in finer details what your module is about
 

@@ -1,49 +1,47 @@
 """Generate section names header (for Python, C, C++ and Fortran)."""
 
 import os
+from collections import UserList
 import argparse
+
 import yaml
 
 from . import utils
 
 
-class WriteSections(object):
+class SectionNames(UserList):
     """Convenient class to write section header files for Python, C, C++ and Fortran."""
 
-    def __init__(self, filename=None, sections=None, max_string_length=256):
+    def __init__(self, data=None, max_string_length=256):
         """
-        Initialise :class:`WriteSections`.
+        Initialise :class:`SectionNames`.
 
         Parameters
         ----------
-        filename : string, default=None
-            File name of *yaml* file list sections (and ``nocopy``, see documentation of :meth:`~pypescript.block.DataBlock.copy`)
-
-        sections : list, default=None
-            List of sections, if ``filename`` not provided.
+        data : list, default=None
+            List of sections.
 
         max_string_length : int, default=256
             Max length of (section, name) keys, used for Fortran.
         """
-        self.sections = sections or []
-        if filename:
-            self.read_sections(filename)
-        self.filename = filename
+        self.data = data or []
         self.max_string_length = max_string_length
         try:
             from pypescript import section_names
             sections = [s for s in dir(section_names) if s != 'nocopy' and not (s.startswith('__') and s.endswith('__'))]
-            self.sections = sections + [s for s in self.sections if s not in sections]
+            self.data = sections + [s for s in self.data if s not in sections]
         except ImportError:
             # probably pypescript calling...
             pass
 
-    def read_sections(self, filename):
+    @classmethod
+    def load(cls, filename):
         """Read sections from *yaml* file ``filename``."""
         with open(filename,'r') as file:
-            sections = yaml.load(file,Loader=yaml.SafeLoader)
-        for section in sections:
-            self.sections.append(section)
+            data = yaml.load(file,Loader=yaml.SafeLoader)
+        new = cls(data)
+        new.filename = filename
+        return new
 
     def header(self, comments='#'):
         """Return header to be added on top of section files."""
@@ -52,61 +50,65 @@ class WriteSections(object):
         if self.filename: header += '{} Edit the root file {} if necessary.\n'.format(comments,self.filename)
         return header
 
-    def __call__(self, filenames=None):
+    def save(self, filename):
         """
-        Generate section header files for language entries of ``filenames``.
+        Save section file to ``filename``, with formatting depending on ``filename`` extension:
+
+        - '.py': Python
+        - '.h': C
+        - '.fi': Fortran
 
         Parameters
         ----------
-        filenames : dict
-            Dictionary with (language, filename) mapping.
+        filename : str
+            Section file name.
         """
-        filenames = filenames or {}
-        for lang,fn in filenames.items():
-            func = getattr(self,'write_{}'.format(lang))
-            fn = filenames[lang]
-            func(fn)
+        if filename.endswith('.py'):
+            self.save_python(filename)
+        elif filename.endswith('.h'):
+            self.save_c(filename)
+        elif filename.endswith('.fi'):
+            self.save_fortran(filename)
+        else:
+            raise ValueError('Unknown file extension {}.'.format(filename))
 
-    def write_python(self, filename):
+    def save_python(self, filename):
         """Write Python section file to ``filename``."""
         utils.mkdir(filename)
         with open(filename,'w') as file:
             file.write(self.header(comments='#'))
-            for section in self.sections:
+            for section in self.data:
                 file.write("{} = '{}'\n".format(section,section))
 
-    def write_c(self, filename):
+    def save_c(self, filename):
         """Write C section header file to ``filename``."""
         utils.mkdir(filename)
         with open(filename,'w') as file:
             file.write(self.header(comments='//'))
             file.write('#define DATABLOCK_MAX_STRING_LENGTH {}\n'.format(self.max_string_length))
-            for section in self.sections:
+            for section in self.data:
                 file.write('#define {}_SECTION "{}"\n'.format(section.upper(),section))
 
-    def write_fortran(self, filename):
+    def save_fortran(self, filename):
         """Write Fortran section header file to ``filename``."""
         utils.mkdir(filename)
         with open(filename,'w') as file:
             file.write(self.header(comments='!'))
             file.write('#define DATABLOCK_MAX_STRING_LENGTH {}\n'.format(self.max_string_length))
-            for section in self.sections:
+            for section in self.data:
                 file.write('#define {}_SECTION "{}"\n'.format(section.upper(),section))
 
 
 def main(args=None):
-    parser = argparse.ArgumentParser(description=WriteSections.__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description=SectionNames.__doc__,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--in-fn', type=str, default='section_names.yaml', help='Input yaml file containing list of section names')
     parser.add_argument('--out-fn', type=str, nargs='*', default=None, help='Output file name')
-    parser.add_argument('--lang', type=str, nargs='*', default=['python','c','fortran'], help='Language')
     opt = parser.parse_args(args=args)
-    default_filenames = {'python':'section_names.py','c':'src/section_names.h','fortran':'src/section_names.fi'}
-    fns = {lang:default_filenames[lang] for lang in opt.lang}
-    if opt.out_fn is not None:
-        for lang,out_fn in zip(opt.lang,opt.out_fn):
-            fns[lang] = out_fn
-    ws = WriteSections(opt.in_fn)
-    ws(fns)
+    fns = ['section_names.py','section_names.h','section_names.fi']
+    if opt.out_fn is None:
+        fns = opt.out_fn
+    ws = SectionNames.load(opt.in_fn)
+    for fn in fns: ws.save(fn)
 
 
 if __name__ == '__main__':
