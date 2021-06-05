@@ -10,8 +10,8 @@ testdict.a.b.c: 42
 path: myglobalpath
 mynumber: 42
 #mylambda: "$(lambda i: (i + ${mynumber} + ${config2.yaml:answer.the}, ${hello.$module_name}))"
-mylambda: e"lambda i: (i + ${mynumber} + ${config2.yaml:answer.the}, ${hello.$module_name})"
+mylambda: e'lambda i:(i + ${mynumber} + ${config2.yaml:answer.the}, ${hello.$module_name})'
 
 world:
   answer3: $&{hello.answer2}
-  test: f"${hello.localpath}/tmp.fits"
+  test: ["f'${hello.localpath}/tmp.fits'", "f'${hello.localpath}/tmp.fits'"]

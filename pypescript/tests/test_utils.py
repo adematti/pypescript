@@ -32,7 +32,7 @@ def test_syntax():
     la = decoded.pop('mylambda')
     assert decoded.data == {'hello': {'answer': {'to': 42, 'the': 44}, 'world': 42, 'answer2': 44,
     'localpath': 'myglobalpath', syntax.module_name: 'hello'}, 'testdict': {'a':{'b':{'c': 42}}},
-    'path': 'myglobalpath', 'mynumber': 42, 'world':{}}
+    'path': 'myglobalpath', 'mynumber': 42, 'world': {'test': ['myglobalpath/tmp.fits','myglobalpath/tmp.fits']}}
     assert decoded.mapping == {('world','answer3'):('hello','answer2')}
     assert la(2) == (88,'hello')
 
