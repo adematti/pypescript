@@ -13,9 +13,6 @@ sphinx:
 conda:
    environment: doc/environment.yaml
 
-python:
-  install:
-    - requirements: doc/requirements.txt
 
 python:
   version: 3.8
