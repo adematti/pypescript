@@ -13,6 +13,7 @@ doc/_build/
 **/job_dir
 **/.DS_Store
 **/section_names.py
+**/*.so
 
 # Unit test / coverage reports
 **/.coverage
