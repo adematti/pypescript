@@ -77,7 +77,7 @@ class BlockMapping(block.BlockMapping,BaseClass):
         if key not in self:
             self[key] = value
 
-    def copy(self):
+    def __copy__(self):
         """Return a shallow copy of ``self``, i.e. only the dictionary mapping to the stored items is copied, not the items themselves."""
         return self.__class__(super(BlockMapping,self).copy())
 

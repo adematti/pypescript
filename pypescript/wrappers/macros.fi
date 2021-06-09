@@ -1,4 +1,4 @@
-#include "section_names_f90.fi"
+#include "section_names.fi"
 
 #define DECLARATIONS integer(kind=DataBlock_status) :: status ; \
   integer(kind=DataBlock_type), value :: config_block, data_block ; \

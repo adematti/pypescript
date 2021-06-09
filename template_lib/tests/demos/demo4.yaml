@@ -34,7 +34,7 @@ data2:
   $module_name: template_lib.data_vector
   y: [1.0,1.0,1.0]
   $datablock_duplicate:
-    data.y: data.ysave
+    data.ysave: data.y
 
 model2:
   $module_name: template_lib.model

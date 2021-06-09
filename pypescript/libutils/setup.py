@@ -16,12 +16,16 @@ from numpy.distutils.command.develop import develop as _develop
 from numpy.distutils import log
 from numpy.distutils.core import setup as _setup
 from distutils.dep_util import newer_group
-import mpi4py
 
 from .generate_section_names import SectionNames
 from .generate_pymodule_csource import write_csource
 
 from . import utils
+
+
+def get_mpi4py_include():
+    import mpi4py
+    return mpi4py.get_include()
 
 
 pypelib_wrappers = {'fortran':'fpypelib','c':'pypelib'}
@@ -70,9 +74,9 @@ class Extension(_Extension):
         self.is_pypemodule = description_file is not None
         if self.is_pypemodule:
             if self.has_fortran_sources():
-                self.extra_link_args = addfirst(self.extra_link_args,*('-l{}'.format(w) for w in pypelib_wrappers.values()))
+                self.extra_link_args = addfirst(self.extra_link_args,'-lmpifort',*('-l{}'.format(w) for w in pypelib_wrappers.values()))
             else:
-                self.extra_link_args = addfirst(self.extra_link_args,'-l{}'.format(pypelib_wrappers['c']))
+                self.extra_link_args = addfirst(self.extra_link_args,'-lmpi','-l{}'.format(pypelib_wrappers['c']))
         self.use_f2py = self.has_fortran_sources() and kwargs.get('f2py_options',None) is not None
         for f90_flag in ['-ffree-line-length-none']:
             if f90_flag not in self.extra_f90_compile_args:
@@ -124,6 +128,7 @@ class build_src(_build_src):
                 ext.depends += [appendpath(build_temp,'lib{}.a'.format(w)) for w in pypelib_wrappers.values()]
             else:
                 ext.depends += [appendpath(build_temp,'lib{}.a'.format(pypelib_wrappers['c']))]
+            ext.depends += ['-lmpi']
             sources = self.pymodule_csource(sources, ext)
         # end changes w.r.t. numpy version #
         sources = self.generate_sources(sources, ext)
@@ -202,7 +207,7 @@ class setup(object):
         Parameters
         ----------
         base_dir : string, default='.'
-            Root of the directory tree to explore.
+            Root of the directory tree to explore. ``section_names.py`` is saved in this root directory.
 
         include_pype_module_names : list, default=None
             List of module names (w.r.t. ``base_dir``) to install.
@@ -226,12 +231,15 @@ class setup(object):
         self.section_fns.append(self.section_pyfn)
         self.section_fns.append(os.path.join(self.section_dir,'section_names.h'))
         self.section_fns.append(os.path.join(self.section_dir,'section_names.fi'))
-        os.environ['CC'] = os.environ.get('MPICC','mpicc')
-        os.environ['CXX'] = os.environ.get('MPICCX','mpicxx')
-        os.environ['F90'] = os.environ.get('MPIF90','mpif90')
+        #os.environ['CC'] = os.environ.get('MPICC','mpicc')
+        #os.environ['CXX'] = os.environ.get('MPICCX','mpicxx')
+        #os.environ['F90'] = os.environ.get('MPIF90','mpif90')
+        #os.environ['LDSHARED'] = os.environ.get('LDSHARED','mpicc')
 
         if packages is None:
             packages = find_packages(self.base_dir)
+            #print(packages)
+            #exit()
 
         if version is None:
             sys.path.insert(0,name)
@@ -253,7 +261,8 @@ class setup(object):
         self.set_pype_modules(include_pype_module_names=include_pype_module_names,exclude_pype_module_names=exclude_pype_module_names)
         py_modules += self.pype_modules
         pype_ext_modules = self.pype_ext_modules
-        data_files += [(os.path.relpath(os.path.dirname(file),start=self.base_dir),[file]) for file in self.description_files]
+        #data_files += [(os.path.relpath(os.path.dirname(file),start=self.base_dir),[file]) for file in self.description_files]
+        data_files += [(os.path.relpath(os.path.dirname(file),start='.'),[file]) for file in self.description_files]
         install_requires += self.pype_module_requires
 
         ext_modules += pype_ext_modules
@@ -265,13 +274,12 @@ class setup(object):
                     self.sections.save(section_fn)
             # if Python extensions, need to compile **pypescript** wrappers
             pypelib_libraries = [(pypelib_wrappers['c'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.c')),
-                                                        #'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include()]})]
-                                                        #'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),
-                                                        #                mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR')]})]
-                                                        'include_dirs':[self.section_dir,self.pypelib_block_dir,sysconfig.get_path('include'),mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR')]})]
+                                                        'include_dirs':[get_mpi4py_include(),sysconfig.get_path('include'),sysconfig.get_config_var('CONFINCLUDEDIR'),
+                                                                    self.section_dir,self.pypelib_block_dir]})]
                                                         # Python include needed by pip, why?
-            pypelib_libraries += [(pypelib_wrappers['fortran'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.F90')),
-                                                        'extra_f90_compile_args':['-ffree-line-length-none']})]
+            if self.has_fortran_sources:
+                pypelib_libraries += [(pypelib_wrappers['fortran'],{'sources':glob.glob(os.path.join(self.pypelib_wrappers_dir,'*.F90')),
+                                                            'extra_f90_compile_args':['-ffree-line-length-none']})]
             libraries = addfirst(libraries,*pypelib_libraries)
         else:
             self.sections.save(self.section_pyfn)
@@ -308,17 +316,21 @@ class setup(object):
         Split modules into Python extensions (i.e. to be compiled) :attr:`pype_ext_modules` and standard Python modules :attr:`pype_modules`.
         It also gathers the requirements from each module as specified in their description file into the list :attr:`pype_module_requires`.
         """
-        extensions,modules,description_files,requirements = [],[],[],set()
+        self.has_fortran_sources = False
+        extensions,modules,description_files,requirements = set(),set(),set(),set()
         for module_dir,full_name,description_file,description in\
             utils.walk_pype_modules(base_dir=self.base_dir,
                                     include_pype_module_names=include_pype_module_names,
                                     exclude_pype_module_names=exclude_pype_module_names):
-            description_files.append(description_file)
+            description_files.add(description_file)
+            #full_name = utils.module_full_name(description_file,=self.)
+            full_name = utils.module_full_name(description_file,base_dir='.')
             sources = description.get('sources',[])
             ext_sources = []
             for source in sources:
                 if source.endswith('.py'):
-                    modules.append(utils.get_module_full_name(os.path.join(module_dir,source),base_dir=base_dir))
+                    #modules.add(utils.module_full_name(os.path.join(module_dir,source),base_dir=self.base_dir))
+                    modules.add(utils.module_full_name(os.path.join(module_dir,source),base_dir='.'))
                 else:
                     ext_sources += source
             requirements |= set(description.get('requirements',[]))
@@ -332,16 +344,18 @@ class setup(object):
                         self.pypelib_block_dir = pkg_resources.resource_filename('pypescript','block')
                     compile_kwargs['sources'] = sum([glob.glob(os.path.abspath(os.path.join(module_dir,source))) for source in ext_sources],[])
                     compile_kwargs['include_dirs'] = addfirst(compile_kwargs.get('include_dirs',[]),
-                                                    self.pypelib_wrappers_dir,self.pypelib_block_dir,self.section_dir,
-                                                    mpi4py.get_include(),sysconfig.get_config_var('CONFINCLUDEDIR'))
+                                                    get_mpi4py_include(),sysconfig.get_path('include'),sysconfig.get_config_var('CONFINCLUDEDIR'),
+                                                    self.pypelib_wrappers_dir,self.pypelib_block_dir,self.section_dir)
                     extension = Extension(full_name, module_dir=module_dir, doc=description.get('description',''),
                                             description_file=description_file, **compile_kwargs)
-                    extensions.append(extension)
+                    if extension.has_fortran_sources():
+                        self.has_fortran_sources = True
+                    extensions.add(extension)
                 else:
-                    modules.append(full_name)
+                    modules.add(full_name)
             else:
-                modules.append(full_name)
-        self.pype_modules = modules
-        self.pype_ext_modules = extensions
-        self.description_files = description_files
+                modules.add(full_name)
+        self.pype_modules = list(modules)
+        self.pype_ext_modules = list(extensions)
+        self.description_files = list(description_files)
         self.pype_module_requires = list(requirements)

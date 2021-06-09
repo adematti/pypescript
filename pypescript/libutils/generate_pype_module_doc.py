@@ -1,5 +1,7 @@
 """Generate **pypescript** modules rst documentation from module description files."""
 
+import re
+
 from . import utils
 
 
@@ -30,18 +32,20 @@ def generate_rst_doc_table(rows, max_line_len=80):
     # first turn description into a list of lines
     def lines_callback(row):
         lines = []
-        if isinstance(row,dict):
+        if isinstance(row,dict) and row:
             for key,value in row.items():
                 lines_ = lines_callback(value)
                 lines.append([key] + lines_[0])
                 lines += [[''] + li for li in lines_[1:]]
         elif isinstance(row,list):
-            for el in row:
-                lines.append(['- {}'.format(el)])
+            for value in row:
+                lines.append(['- {}'.format(value)])
             if not row:
                 lines.append([''])
         else:
-            lines.append([str(row)])
+            row = str(row)
+            if row.endswith('\n'): row = row[:-1]
+            lines.append([row])
         return lines
 
     rows = lines_callback(rows)
@@ -55,7 +59,9 @@ def generate_rst_doc_table(rows, max_line_len=80):
         # if line length larger than maximum allowed line length, split last column
         if line_len > max_line_len:
             phrase_len = len(line[-1]) + max_line_len - line_len # maximum allowed width for last column
-            words = line[-1].split(' ')
+            #words = line[-1].split(' ')
+            #words = re.split(''' (?=(?:[^'"`]|`[^`]*`|'[^']*'|"[^"]*")*$)''',line[-1]) # does not split everything that is between quotes "" '' ``
+            words = re.split(''' (?=(?:[^`]|`[^`]*`)*$)''',line[-1]) # does not split everything that is between quotes ``
             phrases = [words[0]]
             for word in words[1:]: # stack words of last column phrase till they reach last column width
                 if len(word) + 1 + len(phrases[-1]) < phrase_len:
@@ -144,7 +150,7 @@ def generate_rst_doc_table(rows, max_line_len=80):
     return rst
 
 
-def generate_pype_modules_rst_doc(**kwargs):
+def generate_pype_modules_rst_doc(section_underline='-',max_line_len=80, **kwargs):
     """
     Generate rst tables for several modules of the **pypescript** library.
 
@@ -159,13 +165,19 @@ def generate_pype_modules_rst_doc(**kwargs):
         rst-formatted list of tables.
     """
     rst = ''
+    current_section = ''
     for module_dir,full_name,description_file,description in utils.walk_pype_modules(**kwargs):
+        section = full_name.split('.')[0]
+        if section and section != current_section:
+            rst += section + '\n'
+            rst += section_underline*len(section) + '\n'
+            current_section = section
         rst += 'Description of module :mod:`{}`:\n\n'.format(full_name)
-        rst += generate_rst_doc_table(description) + '\n\n'
+        rst += generate_rst_doc_table(description,max_line_len=max_line_len) + '\n\n'
     return rst
 
 
-def write_pype_modules_rst_doc(filename, header='', title='Modules', underline='=', **kwargs):
+def write_pype_modules_rst_doc(filename, header='', title='Modules', title_underline='=', **kwargs):
     """
     Generate rst file with tables for several modules of the **pypescript** library.
 
@@ -192,9 +204,9 @@ def write_pype_modules_rst_doc(filename, header='', title='Modules', underline='
         rst-formatted list of tables.
     """
     utils.mkdir(filename)
-    with open(filename, 'w') as file:
+    with open(filename,'w') as file:
         file.write(header)
         if header: file.write('\n')
-        file.write(title+'\n')
-        file.write(underline*len(title)+'\n\n')
+        file.write(title + '\n')
+        file.write(title_underline*len(title) + '\n\n')
         file.write(generate_pype_modules_rst_doc(**kwargs))

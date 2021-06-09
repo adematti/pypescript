@@ -30,13 +30,13 @@ class ConfigBlock(DataBlock):
         data : string, ConfigBlock, dict, default=None
             Path to configuration file.
             Else, :class:`ConfigBlock` instance to be (shallow) copied.
-            Else, a dictionary as for initalise a :class:`DataBlock` instance.
+            Else, a dictionary as for initialisation of a :class:`DataBlock` instance.
             If ``None``, ignored.
 
         string : string, default=None
             String to be parsed and update ``self`` internal dictionary.
 
-        parser : callable, default=parse_yaml
+        parser : callable
             Parser which turns a string into a dictionary.
         """
         if isinstance(data,ConfigBlock):
@@ -56,11 +56,13 @@ class ConfigBlock(DataBlock):
         block.DataBlock.__init__(self,data=data,mapping=BlockMapping(decoder.mapping))
         self.raw = decoder.raw
 
-    def copy(self):
+    def __copy__(self):
         new = self.__class__.__new__(self.__class__)
         block.DataBlock.__init__(self,data=self.data.copy(),mapping=self.mapping)
         new.raw = self.raw
         return new
+
+    copy = __copy__
 
     def __repr__(self):
         return 'ConfigBlock(data={}, mapping={})'.format(self.data,self.mapping)

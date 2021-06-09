@@ -12,9 +12,10 @@
 #
 import os
 import sys
-sys.path.insert(0,os.path.abspath('..'))
-sys.path.insert(0, os.path.abspath(os.path.join('..','pypescript')))
-lib_dir = os.path.abspath(os.path.join('..','template_lib'))
+
+sys.path.insert(0,os.path.abspath(os.path.join('..','pypescript')))
+lib_dir = os.path.abspath(os.path.join('..','template_lib','template_lib'))
+
 from _version import __version__
 
 # -- General configuration ------------------------------------------------
@@ -66,10 +67,8 @@ html_static_path = []
 
 git_repo = 'https://github.com/adematti/pypescript.git'
 git_root = 'https://github.com/adematti/pypescript/blob/main/'
-docker_root = 'https://hub.docker.com/r/adematti/pypescript/'
 
-extlinks = {'root': (git_root + '%s',''),
-            'dockerroot': (docker_root + '%s','')}
+extlinks = {'root': (git_root + '%s','')}
 
 intersphinx_mapping = {
     'numpy': ('https://docs.scipy.org/doc/numpy/', None)
@@ -84,7 +83,7 @@ def _replace(app, docname, source):
 
 
 ultimate_replacements = {
-    '{gitrepo}' : git_repo
+    '{gitrepo}': git_repo
 }
 
 

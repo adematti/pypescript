@@ -36,7 +36,7 @@ def is_of_type(value, types):
     value : object
         Value to check type of.
 
-    types : list, tuple, string, type or class
+    types : list, string, type or class
         Types to check the return value of :meth:`DataBlock.get` against.
         If list or tuple, check whether any of the proposed types matches.
         If a type is string, will search for the corresponding builtin type.
@@ -54,8 +54,8 @@ def is_of_type(value, types):
     def get_nptype_from_str(type_):
         return {'bool':np.bool_,'int':np.integer,'float':np.floating,'str':np.string_}.get(type_,None)
 
-    if not isinstance(types,(tuple,list)):
-        types = (types,)
+    if not isinstance(types,list):
+        types = [types]
 
     toret = False
     for type_ in types:
@@ -430,7 +430,7 @@ class ScatteredBaseClass(_BaseClass):
     @mpi.CurrentMPIComm.enable
     def mpi_distribute(self, dests, mpicomm=None):
         """
-        Return new instance corresponding to``self`` on smaller ``mpicomm``.
+        Return new instance corresponding to ``self`` on smaller ``mpicomm``.
 
         Parameters
         ----------
@@ -438,7 +438,7 @@ class ScatteredBaseClass(_BaseClass):
             Instance to concentrate on ``mpicomm``.
 
         dests : list, None
-            Ranks of processes of :attrs:`mpicomm` where to send ``self`` lives.
+            Ranks of processes of :attr:`mpicomm` where to send ``self`` lives.
             If ``None``, takes the ranks of processes where ``self`` is not ``None``.
 
         mpicomm : MPI communicator

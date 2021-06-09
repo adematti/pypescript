@@ -7,7 +7,7 @@ import importlib
 
 from .block import BlockMapping, DataBlock, SectionBlock
 from .config import ConfigBlock, ConfigError
-from .libutils import ModuleDescription
+from .libutils import ModuleDescription, syntax_description
 from . import syntax, section_names
 from . import utils
 
@@ -109,14 +109,19 @@ class BaseModule(object):
     def check_options(self):
         """Check provided options are mentioned in description file (if exists), else raises ``ConfigError``."""
         if self.description is not None:
-            available_options = self.description['options']
+            available_options = self.description.get('options',None)
+            if available_options is None: return
+            others = syntax_description.others in available_options
             for name,value in self.options.items():
                 if name in self._available_options:
                     continue
                 if name not in available_options:
-                    raise ConfigError('Option {} for module [{}] is not listed as available options in description file'.format(name,self.name))
+                    if others:
+                        continue
+                    else:
+                        raise ConfigError('Option {} for module [{}] is not listed as available options in description file'.format(name,self.name))
                 types = available_options[name].get('type',None)
-                if types is not None:
+                if types is not None and value is not None:
                     if not utils.is_of_type(value,types):
                         raise ConfigError('Option {} for module [{}] is not of correct type ({}, while allowed types are {})'.format(name,self.name,type(value),types))
                 choices = available_options[name].get('choices',None)
@@ -124,6 +129,7 @@ class BaseModule(object):
                     if value not in choices:
                         raise ConfigError('Option {} for module [{}] is not allowed ({}, while allowed choices are {})'.format(name,self.name,value,choices))
             for name,options in available_options.items():
+                if name == syntax_description.others: continue
                 if 'default' in options:
                     self.options.setdefault(name,options['default'])
 
@@ -236,7 +242,7 @@ class BaseModule(object):
             filename = os.path.join(base_dir,module_file)
             cls.log_info('Importing module {} [{}].'.format(filename,name),rank=0)
             basename = os.path.basename(filename)
-            #base_module_name = os.path.splitext(basename)[0]
+            base_module_name = os.path.splitext(basename)[0]
             spec = importlib.util.spec_from_file_location(base_module_name,filename)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)

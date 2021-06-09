@@ -4,70 +4,16 @@ from collections import UserDict
 
 import yaml
 
-from .libutils.syntax_description import yaml_parser, YamlLoader
-from . import section_names
-
 
 keyword_re_pattern = re.compile('\$(.*?)$')
 replace_re_pattern = re.compile('\${(.*?)}')
-mapping_re_pattern = re.compile('\$\&{(.*?)}')
-
-datablock_duplicate_re_pattern = re.compile('\$\[(.*?)\]')
-datablock_mapping_re_pattern = re.compile('\$\&\[(.*?)\]')
 
 eval_re_pattern = re.compile("e'(.*?)'$")
 format_re_pattern = re.compile("f'(.*?)'$")
 
-
 section_sep = '.'
-block_save_extension = '.npy'
-main = 'main'
-setup_function = 'setup'
-execute_function = 'execute'
-cleanup_function = 'cleanup'
-common_sections = [section_names.common]
 
-_keyword_names = ['module_base_dir','module_name','module_file','module_class',\
-'datablock_set','datablock_mapping','datablock_duplicate',
-'modules','setup','execute','cleanup',\
-'iter','nprocs_per_task','configblock_iter','datablock_iter','datablock_key_iter',\
-'mpiexec','hpc_job_dir','hpc_job_submit','hpc_job_template','hpc_job_options']
-_keyword_cls = []
-keywords = {}
-
-
-for keyword in _keyword_names:
-
-    #def __str__(self):
-    #    return self.__class__.__name__
-
-    #locals()[keyword] = keywords[keyword] = type(keyword,(object,),{'__str__': __str__,'keyword':'${}'.format(keyword)})()
-    locals()[keyword] = keywords[keyword] = '${}'.format(keyword)
-    _keyword_cls.append(keywords[keyword])
-
-
-def remove_keywords(di, other=None):
-    toret = {}
-    if other is None: other = []
-    for key,value in di.items():
-        if key not in _keyword_cls and key not in other:
-            toret[key] = value
-    return toret
-
-
-class KeywordError(Exception):
-
-    def __init__(self, word):
-        self.word = word
-
-    def __str__(self):
-        return 'Unknown keyword {}'.format(self.word)
-
-
-class ParserError(Exception):
-
-    pass
-
+others = '$others'
 
 def split_sections(word, sep=section_sep, default_section=None):
     if isinstance(word,str):
@@ -85,54 +31,44 @@ def join_sections(words, sep=section_sep):
     return section_sep.join(words)
 
 
-def expand_sections(di, sep=section_sep):
+class YamlLoader(yaml.SafeLoader):
 
-    toret = {}
-    for key,value in di.items():
-        if sep is not None:
-            keys = split_sections(key,sep=sep)
-        else:
-            keys = key
-            if not isinstance(keys,(list,tuple)):
-                keys = (key,)
-        if len(keys) > 1:
-            key,value = keys[0],{sep.join(keys[1:]) if sep is not None else keys[1:]:value}
-        else:
-            key = keys[0]
-        if isinstance(value,dict):
-            tmp = toret.get(key,{})
-            tmp.update(expand_sections(value,sep=sep))
-            toret[key] = tmp
-        else:
-            toret[key] = value
-    return toret
+    pass
+
+YamlLoader.add_implicit_resolver(u'tag:yaml.org,2002:float',
+                            re.compile(u'''^(?:
+                             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+                            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+                            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+                            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+                            |[-+]?\\.(?:inf|Inf|INF)
+                            |\\.(?:nan|NaN|NAN))$''', re.X),
+                            list(u'-+0123456789.'))
+
+YamlLoader.add_implicit_resolver('!none',re.compile('None$'),first='None')
+
+def none_constructor(loader, node):
+  return None
+
+YamlLoader.add_constructor('!none',none_constructor)
 
 
-def collapse_sections(di, maxdepth=None, sep=section_sep):
+def yaml_parser(string):
+    """Parse string in the *yaml* format."""
+    # https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
+    config = yaml.load(string,Loader=YamlLoader)
+    data = dict(config)
+    return data
 
-    def callback(di, maxdepth):
-        toret = {}
-        for key,value in di.items():
-            if maxdepth != 1 and isinstance(value,dict):
-                tmp = callback(value,maxdepth - 1 if maxdepth is not None else None)
-                for key2,value2 in tmp.items():
-                    toret[(key,) + key2] = value2
-            else:
-                toret[(key,)] = value
-        return toret
 
-    if maxdepth is not None and maxdepth < 1:
-        raise ValueError('maxepth = {} should be > 1'.format(maxdepth))
-    toret = callback(di,maxdepth)
-    if sep is not None:
-        toret = {sep.join(key):value for key,value in toret.items()}
+class ParserError(Exception):
 
-    return toret
+    pass
 
 
 class Decoder(UserDict):
 
-    def __init__(self, data=None, string=None, parser=None):
+    def __init__(self, data=None, string=None, parser=None, **kwargs):
 
         self.parser = parser
         if parser is None:
@@ -151,7 +87,7 @@ class Decoder(UserDict):
 
         self.data = self.raw = data_
         self._cache = {}
-        self.decode()
+        self.decode(**kwargs)
 
 
     def read_file(self, filename):
@@ -177,14 +113,14 @@ class Decoder(UserDict):
         return toret
 
 
-    def decode(self):
+    def decode(self, decode_eval=True):
 
         # first expand the dictionary .
         def callback(di):
 
             toret = {}
             for key,value in di.items():
-                if (not isinstance(key,str)) or re.match(replace_re_pattern,key) or re.match(datablock_duplicate_re_pattern,key):
+                if (not isinstance(key,str)) or re.match(replace_re_pattern,key):
                     toret[key] = value
                     continue
                 keys = split_sections(key)
@@ -233,10 +169,11 @@ class Decoder(UserDict):
                     if decode is not None:
                         toret.append(decode)
                         continue
-                    decode = self.decode_eval(value)
-                    if decode is not None:
-                        toret.append(decode)
-                        continue
+                    if decode_eval:
+                        decode = self.decode_eval(value)
+                        if decode is not None:
+                            toret.append(decode)
+                            continue
                     toret.append(value)
                 return toret
             toret = {}
@@ -248,88 +185,15 @@ class Decoder(UserDict):
                 if decode is not None:
                     toret[key] = decode
                     continue
-                decode = self.decode_eval(value)
-                if decode is not None:
-                    toret[key] = decode
-                    continue
+                if decode_eval:
+                    decode = self.decode_eval(value)
+                    if decode is not None:
+                        toret[key] = decode
+                        continue
                 toret[key] = value
             return toret
 
         self.data = callback(self.data)
-
-        def callback(di):
-            toret = {}
-            _duplicate, _mapping, _set = {}, {}, {}
-            for key,value in list(di.items()):
-                if isinstance(key,str):
-                    m = re.match(datablock_duplicate_re_pattern,key)
-                    if m:
-                        key_datablock = m.group(1)
-                        if isinstance(value,str):
-                            mv = re.match(datablock_duplicate_re_pattern,value)
-                            if mv:
-                                _duplicate[key_datablock] = mv.group(1)
-                                break
-                            mv = re.match(datablock_mapping_re_pattern,value)
-                            if mv:
-                                _mapping[key_datablock] = mv.group(1)
-                                break
-                        _set[key_datablock] = value
-                    elif isinstance(value,dict):
-                        toret[key] = callback(value)
-                    else:
-                        toret[key] = value
-            for di,kw in zip([_duplicate,_mapping,_set],[datablock_duplicate,datablock_mapping,datablock_set]):
-                if di:
-                    if kw not in toret:
-                        toret[kw] = {}
-                    toret[kw].update(di)
-            return toret
-
-        self.data = callback(self.data)
-
-        # decode keyword in the end, such that previous $ matches are removed
-        def callback(di):
-            toret = {}
-            for key,value in di.items():
-                decode = self.decode_keyword(key)
-                if decode is not None:
-                    toret[decode] = value
-                else:
-                    toret[key] = value
-                if isinstance(value,dict):
-                    toret[key] = callback(value)
-            return toret
-
-        self.data = callback(self.data)
-
-        def callback(di):
-            toret = {}
-            for key,value in list(di.items()):
-                if isinstance(value,dict):
-                    tmp = callback(value)
-                    for key2,value2 in tmp.items():
-                        toret[(key,) + key2] = value2
-                else:
-                    key_mapping = self.decode_mapping(value)
-                    if key_mapping is not None:
-                        toret[(key,)] = key_mapping
-                        del di[key]
-            return toret
-
-        self.mapping = callback(self.data)
-
-
-    def decode_keyword(self, word):
-        if isinstance(word,str):
-            m = re.match(keyword_re_pattern,word)
-            if m:
-                word = m.group(1)
-                try:
-                    return keywords[word]
-                except KeyError:
-                    raise KeywordError(word)
-
 
     def decode_replace(self, word):
         if isinstance(word,str):
@@ -355,12 +219,6 @@ class Decoder(UserDict):
                 if replace is not None:
                     return copy.deepcopy(replace)
                 return toret
-
-    def decode_mapping(self, word):
-        if isinstance(word,str):
-            m = re.match(mapping_re_pattern,word)
-            if m:
-                return split_sections(m.group(1))
 
     def decode_eval(self, word):
 

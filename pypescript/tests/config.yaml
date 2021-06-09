@@ -14,4 +14,5 @@ mylambda: e'lambda i:(i + ${mynumber} + ${config2.yaml:answer.the}, ${hello.$mod
 
 world:
   answer3: $&{hello.answer2}
+  #answer3: 42
   test: ["f'${hello.localpath}/tmp.fits'", "f'${hello.localpath}/tmp.fits'"]

@@ -2,6 +2,7 @@ from pypescript.libutils import setup
 
 
 setup(name='template_lib',
+    base_dir='template_lib',
     author='Arnaud de Mattia et al.',
     maintainer='Arnaud de Mattia',
     url='http://github.com/adematti/template_lib',

@@ -83,5 +83,5 @@ if __name__ == '__main__':
 
     setup_logging()
     test_py()
-    #test_extensions()
-    #test_doc()
+    test_extensions()
+    test_doc()

@@ -125,8 +125,6 @@ def test_demo5():
 if __name__ == '__main__':
 
     setup_logging()
-    test_demo5()
-    exit()
     test_section_names()
     with MemoryMonitor() as mem:
         for i in range(10):
@@ -135,3 +133,4 @@ if __name__ == '__main__':
             test_demo3()
             test_demo3b()
             test_demo4()
+            test_demo5()

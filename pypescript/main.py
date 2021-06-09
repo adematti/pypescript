@@ -22,6 +22,6 @@ def main(config_block=None, pipe_graph_fn=None, data_block=None, save_data_block
         pipeline.plot_pipeline_graph(filename=pipe_graph_fn)
     pipeline.setup()
     pipeline.execute()
-    pipeline.cleanup()
     if save_data_block is not None:
-        pipeline.data_block.save(save_data_block)
+        pipeline.pipe_block.save(save_data_block)
+    pipeline.cleanup()

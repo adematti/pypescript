@@ -92,12 +92,12 @@ def walk_pype_modules(base_dir='.', include_pype_module_names=None, exclude_pype
     exclude_pype_module_names = exclude_pype_module_names or []
     extensions,modules,requirements = [],[],set()
 
-    for module_dir, dirs, files in os.walk(base_dir, followlinks=True):
+    for module_dir,dirs,files in os.walk(base_dir,followlinks=True):
         description_files = [os.path.join(module_dir,file) for file in files if file.endswith(ModuleDescription._file_extension)]
         for description_file in description_files:
             if not ModuleDescription.isinstance(description_file):
                 continue
-            descriptions = ModuleDescription.load(description_file)
+            descriptions = ModuleDescription.load(description_file,decode_eval=False)
             if not isinstance(descriptions,list):
                 descriptions = [descriptions]
             for description in descriptions:

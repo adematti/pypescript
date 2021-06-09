@@ -1,24 +1,54 @@
 import os
+import logging
 from collections import UserDict
 
 import yaml
 
+from .syntax_description import Decoder, YamlLoader
+
 
 class ModuleDescription(UserDict):
 
+    """This class handles module descriptions."""
+
     _file_extension = '.yaml'
 
-    @classmethod
-    def load(cls, filename):
-        with open(filename,'r') as file:
-            data = yaml.load(file,Loader=yaml.SafeLoader)
-        if isinstance(data,list):
-            return [cls(d) for d in data]
-        return cls(data)
+    logger = logging.getLogger('ModuleDescription')
 
-    def save(self, filename):
-        with open(filename,'w') as file:
-            yaml.dump(self.data,file,default_flow_style=None)
+    def __init__(self, data=None, string=None, parser=None, **kwargs):
+        """
+        Initialise :class:`ModuleDescription`.
+
+        Parameters
+        ----------
+        data : string, ModuleDescription, dict, default=None
+            Path to description file.
+            Else, :class:`ModuleDescription` instance to be (shallow) copied.
+            Else, a dictionary.
+            If ``None``, ignored.
+
+        string : string, default=None
+            String to be parsed and update ``self`` internal dictionary.
+
+        parser : callable
+            Parser which turns a string into a dictionary.
+        """
+        if isinstance(data,ModuleDescription):
+            self.__dict__.update(data)
+            return
+
+        decoder = Decoder(data=data,string=string,parser=parser,**kwargs)
+        # filter those entries which match the (section,name) format
+        self.data = decoder.data
+        self.raw = decoder.raw
+
+    @classmethod
+    def load(cls, filename, **kwargs):
+        with open(filename,'r') as file:
+            data = list(yaml.load_all(file,Loader=YamlLoader))
+            if len(data) > 1:
+                return [ModuleDescription(d,**kwargs) for d in data]
+            return ModuleDescription(data[0],**kwargs)
 
     @classmethod
     def isinstance(cls, filename):
@@ -26,9 +56,7 @@ class ModuleDescription(UserDict):
         if not filename.endswith(cls._file_extension):
             return False
         with open(filename,'r') as file:
-            data = yaml.load(file,Loader=yaml.SafeLoader)
-            if not isinstance(data,list):
-                data = [data]
+            data = list(yaml.load_all(file,Loader=YamlLoader))
             if not all(isinstance(d,dict) and 'name' in d for d in data):
                 return False
         basename = os.path.basename(filename[:-len(cls._file_extension)])
