@@ -385,7 +385,6 @@ class BatchPipeline(MPIPipeline):
     _available_options = MPIPipeline._available_options + [syntax.mpiexec,syntax.hpc_job_dir,syntax.hpc_job_submit,syntax.hpc_job_template,syntax.hpc_job_options]
 
     def __init__(self, *args, **kwargs):
-
         super(BatchPipeline,self).__init__(*args,**kwargs)
         setup_modules = [todo.module for todo in self.setup_todos]
         cleanup_modules = [todo.module for todo in self.cleanup_todos]

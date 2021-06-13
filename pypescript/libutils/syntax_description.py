@@ -53,10 +53,19 @@ def none_constructor(loader, node):
 YamlLoader.add_constructor('!none',none_constructor)
 
 
-def yaml_parser(string):
+def yaml_parser(string, index=None):
     """Parse string in the *yaml* format."""
     # https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
-    config = yaml.load(string,Loader=YamlLoader)
+    alls = list(yaml.load_all(string,Loader=YamlLoader))
+    if index is not None:
+        if isinstance(index,dict):
+            for config in alls:
+                if all([config.get(name) == value for name,value in index.items()]):
+                    break
+        else:
+            config = alls[index]
+    else:
+        config = yaml.load(string,Loader=YamlLoader)
     data = dict(config)
     return data
 
@@ -68,7 +77,7 @@ class ParserError(Exception):
 
 class Decoder(UserDict):
 
-    def __init__(self, data=None, string=None, parser=None, **kwargs):
+    def __init__(self, data=None, string=None, parser=None, filename=None, decode_eval=True, **kwargs):
 
         self.parser = parser
         if parser is None:
@@ -76,18 +85,20 @@ class Decoder(UserDict):
 
         data_ = {}
 
+        self.filename = filename
         if isinstance(data,str):
             if string is None: string = ''
+            self.filename = data
             string += self.read_file(data)
         elif data is not None:
             data_ = dict(data)
 
         if string is not None:
-            data_.update(self.parser(string))
+            data_.update(self.parser(string,**kwargs))
 
         self.data = self.raw = data_
         self._cache = {}
-        self.decode(**kwargs)
+        self.decode(decode_eval=decode_eval)
 
 
     def read_file(self, filename):
@@ -204,11 +215,23 @@ class Decoder(UserDict):
                 if len(fn_sections) == 1:
                     toret = self.search(*sections)
                 elif len(fn_sections) == 2:
-                    fn = fn_sections[0]
-                    if fn in self._cache:
-                        new = self._cache[fn]
+                    fn_index = fn_sections[0]
+                    if fn_index in self._cache:
+                        new = self._cache[fn_index]
                     else:
-                        new = self._cache[fn] = self.__class__(fn)
+                        match = re.match('(.*)#(.*?)$',fn_index)
+                        if match:
+                            fn = match.group(1)
+                            try:
+                                index = int(match.group(2))
+                            except ValueError:
+                                index = {'name':match.group(2)}
+                        else:
+                            fn = fn_index
+                            index = None
+                        if not fn:
+                            fn = self.filename
+                        new = self._cache[fn_index] = self.__class__(fn,index=index)
                     if not fn_sections[1]: #path: => we retrieve the whole dict
                         toret = new.data
                     else:

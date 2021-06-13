@@ -119,19 +119,21 @@ class BaseModule(object):
                     if others:
                         continue
                     else:
-                        raise ConfigError('Option {} for module [{}] is not listed as available options in description file'.format(name,self.name))
+                        raise ConfigError('Option "{}" for module [{}] is not listed as available options in description file'.format(name,self.name))
                 types = available_options[name].get('type',None)
                 if types is not None and value is not None:
                     if not utils.is_of_type(value,types):
-                        raise ConfigError('Option {} for module [{}] is not of correct type ({}, while allowed types are {})'.format(name,self.name,type(value),types))
+                        raise ConfigError('Option "{}" for module [{}] is not of correct type ({}, while allowed types are {})'.format(name,self.name,type(value),types))
                 choices = available_options[name].get('choices',None)
                 if choices is not None:
                     if value not in choices:
-                        raise ConfigError('Option {} for module [{}] is not allowed ({}, while allowed choices are {})'.format(name,self.name,value,choices))
+                        raise ConfigError('Option "{}" for module [{}] is not allowed ({}, while allowed choices are {})'.format(name,self.name,value,choices))
             for name,options in available_options.items():
                 if name == syntax_description.others: continue
                 if 'default' in options:
                     self.options.setdefault(name,options['default'])
+                if name not in self.options:
+                    raise ConfigError('Option "{}" for module [{}] is requested'.format(name,self.name))
 
     def set_data_block(self, data_block=None):
         """
@@ -267,13 +269,14 @@ class BaseModule(object):
 
         import inspect
         all_cls = inspect.getmembers(module,inspect.isclass)
-        all_name_cls = [c[0] for c in all_cls]
+        # to select classes that are indeed defined (not imported) in the provided module
+        all_name_cls = [c[0] for c in all_cls if c[1].__module__ == module.__name__]
 
         if module_class is None:
             if description and not multiple_descriptions:
                 name_cls = description['name']
             else:
-                if len(all_cls) == 1:
+                if len(all_name_cls) == 1:
                     name_cls = all_name_cls[0]
                 else:
                     name_cls = utils.snake_to_pascal_case(base_module_name)
@@ -300,27 +303,28 @@ class BaseModule(object):
                 module_class = name_cls
 
         if module_class is not None:
-            if module_class in all_name_cls:
-                if multiple_descriptions:
-                    found = False
-                    for desc in description:
-                        if desc['name'] == module_class:
-                            description = desc
-                            found = True
-                            break
-                    if not found:
-                        cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file),rank=0)
-                mod_cls = getattr(module,module_class)
-                if issubclass(mod_cls,cls):
-                    toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block)
-                else:
-                    new_cls = type(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
-                    for step in steps:
-                        setattr(new_cls,step,getattr(mod_cls,get_func_name(step)))
-                    toret = new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
-                #_all_loaded_modules[name] = toret
-                return toret
-            raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,base_module_name,name))
+            mod_cls = getattr(module,module_class,None)
+            if mod_cls is None:
+                raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,base_module_name,name))
+            if multiple_descriptions:
+                found = False
+                for desc in description:
+                    if desc['name'] == module_class:
+                        description = desc
+                        found = True
+                        break
+                if not found:
+                    cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file),rank=0)
+            mod_cls = getattr(module,module_class)
+            if issubclass(mod_cls,cls):
+                toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
+            else:
+                new_cls = type(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
+                for step in steps:
+                    setattr(new_cls,step,getattr(mod_cls,get_func_name(step)))
+                toret = new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
+            #_all_loaded_modules[name] = toret
+            return toret
 
     @classmethod
     def plot_inheritance_graph(cls, filename, exclude=None):

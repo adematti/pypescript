@@ -45,10 +45,10 @@ class ModuleDescription(UserDict):
     @classmethod
     def load(cls, filename, **kwargs):
         with open(filename,'r') as file:
-            data = list(yaml.load_all(file,Loader=YamlLoader))
-            if len(data) > 1:
-                return [ModuleDescription(d,**kwargs) for d in data]
-            return ModuleDescription(data[0],**kwargs)
+            descriptions = list(yaml.load_all(file,Loader=YamlLoader))
+        if len(descriptions) > 1:
+            return [ModuleDescription(d,filename=filename,**kwargs) for d in descriptions]
+        return ModuleDescription(descriptions[0],filename=filename,**kwargs)
 
     @classmethod
     def isinstance(cls, filename):

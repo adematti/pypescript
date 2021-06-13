@@ -1,0 +1,26 @@
+name: BaseLikelihood
+version: 0.0.1
+date: 01/06/2021
+author: Arnaud de Mattia
+maintainer: Arnaud de Mattia
+description: Template base likelihood
+
+long description: >
+                  :class:`BaseLikelihood` extends :class:`~pypescript.BasePipeline`, hence is expected to run several modules to e.g. setup data and execute model.
+                  Data vector data.y is set in the setup step.
+                  The model model.y is read at each execute step and the corresponding likelihood.loglkl computed.
+
+setup input:
+  data.y:
+    type: float_array
+    description: data vector
+
+execute input:
+  model.y:
+    type: float_array
+    description: model vector
+
+execute output:
+  likelihood.loglkl:
+    type: float
+    description: log-likelihood

@@ -238,7 +238,7 @@ class setup(object):
 
         if packages is None:
             packages = find_packages(self.base_dir)
-            #print(packages)
+            packages = ['.'.join([os.path.basename(self.base_dir),package]) for package in packages]
             #exit()
 
         if version is None:
@@ -284,7 +284,7 @@ class setup(object):
         else:
             self.sections.save(self.section_pyfn)
         # to have section_names.py at the root directory
-        data_files += [(name,[self.section_pyfn])]
+        data_files += [(self.base_dir,[self.section_pyfn])]
 
         # to ensure this is also the case
         class develop(_develop):
