@@ -113,12 +113,14 @@ def collapse_sections(di, maxdepth=None, sep=section_sep):
     def callback(di, maxdepth):
         toret = {}
         for key,value in di.items():
+            if not isinstance(key,tuple):
+                key = (key,)
             if maxdepth != 1 and isinstance(value,dict):
                 tmp = callback(value,maxdepth - 1 if maxdepth is not None else None)
                 for key2,value2 in tmp.items():
-                    toret[(key,) + key2] = value2
+                    toret[key + key2] = value2
             else:
-                toret[(key,)] = value
+                toret[key] = value
         return toret
 
     if maxdepth is not None and maxdepth < 1:

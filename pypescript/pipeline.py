@@ -207,6 +207,7 @@ class BasePipeline(BaseModule):
                     func(*args,**kwargs)
                 except Exception as exc:
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
+
                 for keyg,keyl in self._datablock_duplicate.items():
                     if keyl in self.data_block:
                         #print('db',self.name,keyg,keyl,id(self.data_block[keyl]))
@@ -265,8 +266,7 @@ class MPIPipeline(BasePipeline):
     logger = logging.getLogger('MPIPipeline')
     _available_options = BasePipeline._available_options + [syntax.iter,syntax.nprocs_per_task,syntax.configblock_iter,syntax.datablock_iter,syntax.datablock_key_iter]
 
-    def set_config_block(self, options=None, config_block=None):
-        super(MPIPipeline,self).set_config_block(options=options,config_block=config_block)
+    def setup(self):
         self._iter = self.options.get(syntax.iter,None)
         if self._iter is not None and np.ndim(self._iter) == 0:
             # most certainly the number of iterations
@@ -295,9 +295,7 @@ class MPIPipeline(BasePipeline):
                 tmp = []
                 for i in self._iter:
                     value = self._datablock_key_iter[key](i)
-                    value = syntax.split_sections(value)
-                    if len(value) == 1:
-                        value = (key[0],) + value
+                    value = syntax.split_sections(value,default_section=key[0])
                     if value in self._datablock_bcast:
                         raise ConfigError('DataBlock key {} must appear only once for all iterations.'.format(value))
                     tmp.append(value)
@@ -305,6 +303,7 @@ class MPIPipeline(BasePipeline):
                 self._datablock_bcast += tmp
             for key in self._datablock_bcast:
                 self._datablock_duplicate[key] = key
+        super(MPIPipeline,self).setup()
 
     def execute(self):
         """Execute :attr:`modules`."""
@@ -394,8 +393,7 @@ class BatchPipeline(MPIPipeline):
                 raise ConfigError('{} requires module [{}] to run entirely (setup, execute, cleanup) in the pipeline execute step.'.format(self.__class__.__name__,todo.module.name))
             self.module_names.append(todo.module.name)
 
-    def set_config_block(self, options=None, config_block=None):
-        super(BatchPipeline,self).set_config_block(options=options,config_block=config_block)
+    def setup(self):
         self.job_dir = self.options.get_string(syntax.hpc_job_dir,'job_dir')
         self.mpiexec = self.options.get_string(syntax.mpiexec,'mpiexec')
         template_fn = self.options.get_string(syntax.hpc_job_template,None)
@@ -406,6 +404,7 @@ class BatchPipeline(MPIPipeline):
             self.job_options = self.options.get_dict(syntax.hpc_job_options,{})
         else:
             self.job_template = None
+        super(BatchPipeline,self).setup()
 
     def find_file_task(self, filetype, itask=None):
         if filetype in ['config_block']:
@@ -457,7 +456,6 @@ class BatchPipeline(MPIPipeline):
         return data_block
 
     def execute(self):
-
         self.iconfig_block = self.config_block.copy()
         options = {}
         options[syntax.execute] = [syntax.join_sections((todo.module.name,funcname)) for todo in self.execute_todos for funcname in todo.funcnames]

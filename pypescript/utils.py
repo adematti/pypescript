@@ -147,11 +147,13 @@ def savefile(func):
     """
     @functools.wraps(func)
     def wrapper(self, filename, *args, **kwargs):
-        dirname = os.path.dirname(filename)
-        mkdir(dirname)
-        self.log_info('Saving to {}.'.format(filename),rank=0)
+        if filename is not None:
+            dirname = os.path.dirname(filename)
+            mkdir(dirname)
+            self.log_info('Saving to {}.'.format(filename),rank=0)
         toret = func(self,filename,*args,**kwargs)
         self.mpicomm.Barrier()
+        return toret
     return wrapper
 
 
@@ -296,6 +298,7 @@ class _BaseClass(object):
         """Return shallow copy of ``self``."""
         new = self.__class__.__new__(self.__class__)
         new.__dict__.update(self.__dict__)
+        if hasattr(self,'attrs'): new.attrs = self.attrs.copy()
         return new
 
     def copy(self):
