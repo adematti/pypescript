@@ -1,3 +1,4 @@
+import os
 import re
 import copy
 from collections import UserDict
@@ -229,7 +230,9 @@ class Decoder(UserDict):
                         else:
                             fn = fn_index
                             index = None
-                        if not fn:
+                        if fn:
+                            fn = os.path.join(os.path.dirname(self.filename),fn)
+                        else:
                             fn = self.filename
                         new = self._cache[fn_index] = self.__class__(fn,index=index)
                     if not fn_sections[1]: #path: => we retrieve the whole dict
