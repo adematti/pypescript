@@ -33,17 +33,18 @@ Or have the three functions in a file:
 
 .. code-block:: python
 
-  def setup(config_block, data_block):
+  def setup(name, config_block, data_block):
       # setup module (called at the beginning)
 
-  def execute(config_block, data_block):
+  def execute(name, config_block, data_block):
       # execute, i.e. do calculation (called at each iteration)
 
-  def cleanup(config_block, data_block):
+  def cleanup(name, config_block, data_block):
       # cleanup, i.e. free variables if needed (called at the end)
 
+``name`` is the module local name, set at run time.
 ``config_block`` and ``data_block`` inherit (are) from the dictionary-like :class:`~pypescript.block.DataBlock`,
-where elements can be accessed through ``(section,name)``.
+where elements can be accessed through ``(section, name)``.
 When creating new sections, it is good practice to add them to :root:`pypescript/section_names.yaml`, reinstall
 and use the Python variable instead, e.g. ``section_names.my_section`` (to avoid typos).
 
