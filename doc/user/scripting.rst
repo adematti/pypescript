@@ -50,10 +50,14 @@ and a common covariance matrix ``cov``. Our parameter ``.yaml`` file would then 
 
 
 Here module names (left aligned) can be of any name, except ``main`` which is the entry to the pipeline.
-The fields ``modules`` provided for :class:`~pypescript.module.BasePipeline` inherited-modules  (called (sub)pipelines in the following)
+The fields ``$modules`` provided for :class:`~pypescript.module.BasePipeline` inherited-modules  (called (sub)pipelines in the following)
 list the modules they run.
 
-One can achieve the same thing in Python with (for a theory model called :mod:`~template_lib.model.FlatModel`):
+.. note::
+
+  All **pypescript** keywords start witht the Dollar sign $
+
+One can achieve the same pipeline in Python with (for a theory model called :mod:`~template_lib.model.FlatModel`):
 
 .. code-block:: python
 
@@ -98,7 +102,7 @@ Similarly, modules are agnostic about the operations performed by other modules.
 This is key to ensuring modules do not need to be modified when adding new ones.
 
 Hence, the pipeline integrity is ensured by the user script.
-The main difficulty is to ensure that each module takes the input of the preceding module at the relevant entry (``section``, ``name``)
+The main difficulty is to ensure that each module takes the input of the preceding module at the relevant entry ``(section, name)``
 of ``data_block``, the :class:`~pypescript.block.DataBlock` instance passed to all modules (see :ref:`user-framework`).
 
 CosmoSIS implements a linear pipeline: all modules form a single chain.
@@ -115,7 +119,7 @@ Instead, contrary to CosmoSIS, each (sub)pipeline creates (at initialisation onl
 Hence, any change made these modules to the ``data_block`` are local (effective within the (sub)pipeline), which we think is the most commmon expected behaviour.
 Therefore, a precomputation performed ahead of this (sub)pipeline, saved into ``data_block[section,name]`` will not be erased by the
 modules of this (sub)pipeline even if they write in the same entry of ``data_block``.
-This allows modules to *update* (for them) previous entries in ``data_block`` and hence to keep a short list of entries (``section``, ``name``) in use.
+This allows modules to *update* (for them) previous entries in ``data_block`` and hence to keep a short list of entries ``(section, name)`` in use.
 Then, most of the links between module input and output entries is encoded in the pipeline structure itself.
 We think it also makes the pipeline structure more readable.
 Yet, this may not be sufficient in some corner cases; we may e.g. want to save the result of a given operation (e.g. derived parameter)
@@ -124,15 +128,15 @@ performed at some position in the tree. This is made possible by using the keywo
   datablock_duplicate:
     section2.name2: section1.name1
 
-will (shallow!) copy the element from ``data_block`` entry (``section1``, ``name1``) to entry (``section2``, ``name2``).
+will (shallow!) copy the element from ``data_block`` entry ``(section1, name1)`` to entry ``(section2, name2)`` at each step (``setup``, ``execute``, ``cleanup``).
 There is a global (i.e. shared by all modules whatever their depth) section: 'common'. So taking ``section2 = 'common'`` will make the element accessible anywhere in the pipeline.
 
-One can also locally (i.e. in one module or subpipeline) map a ``data_block`` entry (``section1``, ``name1``) to entry (``section2``, ``name2``)::
+One can also locally (i.e. in one module or subpipeline) map a ``data_block`` entry ``(section1, name1)`` to entry ``(section2, name2)``::
 
   datablock_mapping:
     section2.name2: section1.name1
 
-Unlike ``datablock_duplicate``, this works as a reference: any change in the value pointed by entry (``section1``, ``name1``) is visible by (``section2``, ``name2``).
+Unlike ``datablock_duplicate``, this works as a reference: any change in the value pointed by entry ``(section1, name1)`` is visible by ``(section2, name2)``.
 This can be useful in case one wants to cast modules-specific parameters to their standard name within the relevant modules.
 
 Eventually, one can locally set ``data_block`` entries using e.g.::
@@ -172,13 +176,95 @@ For rapid scripting, a number of configuration file shortcuts have been defined.
 
 Replacements
 ^^^^^^^^^^^^
-One can refer to values define in any part of the configuration file through the syntax ``${section1.section2...}``, e.g.::
+One can refer to values define in any part of the configuration file through the syntax ``${section1.section2...}``, e.g.:
+
+.. code-block:: yaml
 
   answer:
     to: 42
 
-  double: 84
+  the: 84
 
-  universe:
+  ultimate:
     question: ${answer.to}
-    double: ${double}
+    of: ${the}
+
+Here ``${answer.to}`` will be replaced by 42, and ``${the}`` by 84.
+Note that since ``(section, name)`` only fields are retained, the original ``the`` entry will be discarded in the rest of the pipeline.
+
+Mapping (references)
+^^^^^^^^^^^^^^^^^^^^
+``config_block`` entries can be mapped to each other through the syntax ``$&{section.name}``, e.g.:
+
+.. code-block:: yaml
+
+  answer:
+    to: 42
+
+  ultimate:
+    question: $&{answer.to}
+
+Here the ``config_block`` entry ``(ultimate, question)`` will refer to ``(answer, to)`` (meaning any change to the latter in the process of the pipeline will affect as well the former).
+
+Eval pattern
+^^^^^^^^^^^^
+In some cases we may want to directly evaluate some Python code (e.g. comprehension list).
+The syntax is ``e''``:
+
+.. code-block:: yaml
+
+  answer:
+    to: 42
+
+  ultimate:
+    question: e'[${answer.to} + i for i in range(10)]'
+
+The entry ``(ultimate, question)`` will be filled with the list of size 10, filled with numbers from 42 to 53.
+
+Format pattern
+^^^^^^^^^^^^^^
+One may want to set variables defined anywhere in the configuration file (e.g. a directory path) into a string (e.g. a full file path).
+Here is the corresponding syntax:
+
+.. code-block:: yaml
+
+  plots_dir: 'plots'
+
+  ultimate:
+    question: f'${plots_dir}/my_plot.png'
+    answer: e'"{}/my_plot.png".format(${plots_dir})'
+
+The entry ``(ultimate, question)`` will be filled with the string 'plots/my_plot.png'.
+The eval syntax produces the same output in ``(ultimate, answer)`` but is more verbose.
+
+
+data_block operations
+^^^^^^^^^^^^^^^^^^^^^
+We also propose shortcuts for datablock_duplicate, datablock_mapping and datablock_set operations presented above.
+These ``data_block`` operations use ``[]`` instead of ``{}`` for ``config_block``.
+
+One can achieve the ``datablock_duplicate`` operation (shallow copy of ``data_block`` entry from ``(section1, name1)`` to ``(section2, name2)``) through the syntax:
+
+.. code-block:: yaml
+
+  ultimate:
+    $[section2.name2]: $[section1.name1]
+
+One can achieve the ``datablock_mapping`` operation (``data_block`` entry ``(section2, name2)`` referencing ``(section1, name1)``) through the syntax:
+
+.. code-block:: yaml
+
+  ultimate:
+    $[section2.name2]: $&[section1.name1]
+
+Eventually, the ``datablock_set`` operation (locally filling ``data_block`` entry ``(section, name)``) can be achieved with:
+
+.. code-block:: yaml
+
+  answer:
+    to: 42
+
+  ultimate:
+    $[section.name]: 42
+
+Here 42 can be replaced by any reference to the configuration file (e.g. ``${answer.to}``).
