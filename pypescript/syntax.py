@@ -1,3 +1,4 @@
+import os
 import re
 import copy
 from collections import UserDict
@@ -134,7 +135,7 @@ def collapse_sections(di, maxdepth=None, sep=section_sep):
 
 class Decoder(UserDict):
 
-    def __init__(self, data=None, string=None, parser=None):
+    def __init__(self, data=None, string=None, base_dir=None, parser=None):
 
         self.parser = parser
         if parser is None:
@@ -142,8 +143,10 @@ class Decoder(UserDict):
 
         data_ = {}
 
+        self.base_dir = '.'
         if isinstance(data,str):
             if string is None: string = ''
+            if base_dir is None: self.base_dir = os.path.dirname(data)
             string += self.read_file(data)
         elif data is not None:
             data_ = dict(data)
@@ -342,7 +345,7 @@ class Decoder(UserDict):
                 if len(fn_sections) == 1:
                     toret = self.search(*sections)
                 elif len(fn_sections) == 2:
-                    fn = fn_sections[0]
+                    fn = os.path.join(self.base_dir,fn_sections[0])
                     if fn in self._cache:
                         new = self._cache[fn]
                     else:
