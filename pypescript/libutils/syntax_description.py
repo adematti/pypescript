@@ -78,7 +78,7 @@ class ParserError(Exception):
 
 class Decoder(UserDict):
 
-    def __init__(self, data=None, string=None, parser=None, filename=None, decode_eval=True, **kwargs):
+    def __init__(self, data=None, string=None, parser=None, filename=None, decode=True, decode_eval=True, **kwargs):
 
         self.parser = parser
         if parser is None:
@@ -99,7 +99,7 @@ class Decoder(UserDict):
 
         self.data = self.raw = data_
         self._cache = {}
-        self.decode(decode_eval=decode_eval)
+        if decode: self.decode(decode_eval=decode_eval)
 
 
     def read_file(self, filename):
@@ -121,7 +121,7 @@ class Decoder(UserDict):
         try:
             toret = callback(self.data,*keys)
         except KeyError as exc:
-            raise ParserError('Required key "{}" does not exit'.format(section_sep.join(keys))) from exc
+            raise ParserError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
         return toret
 
 
@@ -234,7 +234,7 @@ class Decoder(UserDict):
                             fn = os.path.join(os.path.dirname(self.filename),fn)
                         else:
                             fn = self.filename
-                        new = self._cache[fn_index] = self.__class__(fn,index=index)
+                        new = self._cache[fn_index] = self.__class__(fn,index=index,decode=False)
                     if not fn_sections[1]: #path: => we retrieve the whole dict
                         toret = new.data
                     else:

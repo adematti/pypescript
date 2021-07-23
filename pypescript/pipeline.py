@@ -4,7 +4,7 @@ import subprocess
 
 import numpy as np
 
-from .module import BaseModule, _import_pygraphviz
+from .module import BaseModule, MetaModule, _import_pygraphviz
 from . import syntax
 from . import utils
 from .block import BlockMapping, DataBlock, SectionBlock
@@ -24,13 +24,51 @@ class ModuleTodo(object):
     def __repr__(self):
         return 'ModuleToDo(pipeline=[{}],module=[{}],funcnames={})'.format(self.pipeline.name,self.module.name,self.funcnames)
 
-    def __call__(self):
+    def set_data_block(self):
         self.module.set_data_block(self.pipeline.pipe_block)
+
+    def compute(self):
         for func in self.func:
             func()
 
+    def __call__(self):
+        self.set_data_block()
+        self.compute()
 
-class BasePipeline(BaseModule):
+
+class MetaPipeline(MetaModule):
+
+    def set_functions(cls, functions):
+
+        """
+        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
+        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
+        """
+        def make_wrapper(name, fun):
+            def wrapper(self):
+                for key,value in self._datablock_set.items():
+                    self.data_block[key] = value
+
+                try:
+                    fun(self)
+                except Exception as exc:
+                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
+
+                for keyg,keyl in self._datablock_duplicate.items():
+                    if keyl in self.data_block:
+                        #print('db',self.name,keyg,keyl,id(self.data_block[keyl]))
+                        self.data_block[keyg] = self.data_block[keyl]
+                    elif keyl in self.pipe_block: # because not necessarily present at each step...
+                        #print('pb',self.name,keyg,keyl,id(self.pipe_block[keyl]))
+                        self.data_block[keyg] = self.pipe_block[keyl]
+
+            return wrapper
+
+        for step,fun in functions.items():
+            setattr(cls,step,make_wrapper(step,fun))
+
+
+class BasePipeline(BaseModule,metaclass=MetaPipeline):
     """
     Extend :class:`BaseModule` to load, set up, execute, and clean up several modules.
 
@@ -190,37 +228,6 @@ class BasePipeline(BaseModule):
         for todo in self.cleanup_todos:
             todo()
 
-    def __getattribute__(self, name):
-        """
-        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
-        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
-        """
-        if name in [syntax.setup_function,syntax.execute_function,syntax.cleanup_function]:
-            func = object.__getattribute__(self,name)
-
-            def wrapper(*args,**kwargs):
-
-                for key,value in self._datablock_set.items():
-                    self.data_block[key] = value
-
-                try:
-                    func(*args,**kwargs)
-                except Exception as exc:
-                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
-
-                for keyg,keyl in self._datablock_duplicate.items():
-                    if keyl in self.data_block:
-                        #print('db',self.name,keyg,keyl,id(self.data_block[keyl]))
-                        self.data_block[keyg] = self.data_block[keyl]
-                    elif keyl in self.pipe_block: # because not necessarily present at each step...
-                        #print('pb',self.name,keyg,keyl,id(self.pipe_block[keyl]))
-                        self.data_block[keyg] = self.pipe_block[keyl]
-
-            return wrapper
-
-        return object.__getattribute__(self,name)
-
-
     def plot_pipeline_graph(self, filename):
         """Plot pipeline as a graph to ``filename``."""
         pgv = _import_pygraphviz()
@@ -245,6 +252,33 @@ class BasePipeline(BaseModule):
         graph.draw(filename)
 
 
+class StreamPipeline(BasePipeline):
+    """
+    Extend :class:`BaseModule` to load, set up, execute, and clean up several modules without copying :attr:`data_block`.
+
+    Attributes
+    ----------
+    modules : list
+        List of modules.
+    """
+    def setup(self):
+        """Set up :attr:`modules`."""
+        self.pipe_block = self.data_block
+        for todo in self.setup_todos:
+            todo()
+
+    def execute(self):
+        """Execute :attr:`modules`."""
+        self.pipe_block = self.data_block
+        for todo in self.execute_todos:
+            todo()
+
+    def cleanup(self):
+        """Clean up :attr:`modules`."""
+        self.pipe_block = self.data_block
+        for todo in self.cleanup_todos:
+            todo()
+
 
 def _make_callable_array(array):
 
@@ -256,7 +290,7 @@ def _make_callable_array(array):
 
 class MPIPipeline(BasePipeline):
     """
-    Extend :class:`BaseModule` to load, set up, execute, and clean up several modules.
+    Extend :class:`BaseModule` to load, set up, execute, and clean up several modules in parallel with MPI.
 
     Attributes
     ----------

@@ -31,9 +31,40 @@ def mimport(module_name, module_file=None, module_class=None, name=None, data_bl
 
 
 #_all_loaded_modules = {}
+class MetaModule(type):
+
+    def __new__(meta, name, bases, class_dict):
+        cls = super().__new__(meta, name, bases, class_dict)
+        cls.set_functions({name: getattr(cls,name) for name in [syntax.setup_function,syntax.execute_function,syntax.cleanup_function]})
+        return cls
+
+    def set_functions(cls, functions):
+
+        """
+        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
+        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
+        """
+        def make_wrapper(name, fun):
+            def wrapper(self):
+                for key,value in self._datablock_set.items():
+                    self.data_block[key] = value
+
+                try:
+                    fun(self)
+                except Exception as exc:
+                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
+
+                for keyg,keyl in self._datablock_duplicate.items():
+                    if keyl in self.data_block:
+                        self.data_block[keyg] = self.data_block[keyl]
+            return wrapper
+
+        for step,fun in functions.items():
+            setattr(cls,step,make_wrapper(step, fun))
+
 
 @utils.addclslogger
-class BaseModule(object):
+class BaseModule(object,metaclass=MetaModule):
     """
     Base module class, which wraps pure Python modules or Python C extensions.
     Modules interact with the rest of the pipeline through the three methods :meth:`BaseModule.setup`, :meth:`BaseModule.execute`
@@ -101,7 +132,7 @@ class BaseModule(object):
             for name,value in options.items():
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
-        self._datablock_set = syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),sep=None)
+        self._datablock_set = syntax.expand_sections(syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),sep=syntax.section_sep),sep=syntax.section_sep)
         self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=syntax.section_sep),sep=syntax.section_sep)
         self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{}),sep=syntax.section_sep),sep=syntax.section_sep)
         self.check_options()
@@ -163,32 +194,6 @@ class BaseModule(object):
     def cleanup(self):
         """Clean up, i.e. free variables if needed (called at the end)."""
         raise NotImplementedError
-
-    def __getattribute__(self, name):
-        """
-        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
-        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
-        """
-        if name in [syntax.setup_function,syntax.execute_function,syntax.cleanup_function]:
-            fun = object.__getattribute__(self,name)
-
-            def wrapper(*args,**kwargs):
-
-                for key,value in self._datablock_set.items():
-                    self.data_block[key] = value
-
-                try:
-                    fun(*args,**kwargs)
-                except Exception as exc:
-                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
-
-                for keyg,keyl in self._datablock_duplicate.items():
-                    if keyl in self.data_block:
-                        self.data_block[keyg] = self.data_block[keyl]
-
-            return wrapper
-
-        return object.__getattribute__(self,name)
 
     def __str__(self):
         """String as module class name + module local name (in this pipeline)."""
@@ -283,7 +288,7 @@ class BaseModule(object):
             if all(hasattr(module,get_func_name(step)) for step in steps):
                 if description and multiple_descriptions:
                     raise ImportError('Description file {} describes multiple modules while there is only one in {}'.format(description_file,base_module_name))
-                new_cls = type(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
+                new_cls = MetaModule(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
 
                 def _make_func(module,step):
                     mod_func = getattr(module,get_func_name(step))
@@ -293,8 +298,8 @@ class BaseModule(object):
 
                     return func
 
-                for step in steps:
-                    setattr(new_cls,step,_make_func(module,step))
+                new_cls.set_functions({step:_make_func(module,step) for step in steps})
+
                 return new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
                 #_all_loaded_modules[name] = toret
                 #return toret
@@ -315,13 +320,13 @@ class BaseModule(object):
                         break
                 if not found:
                     cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file),rank=0)
+                    description = None
             mod_cls = getattr(module,module_class)
             if issubclass(mod_cls,cls):
                 toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
             else:
-                new_cls = type(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
-                for step in steps:
-                    setattr(new_cls,step,getattr(mod_cls,get_func_name(step)))
+                new_cls = MetaModule(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
+                new_cls.set_functions({step:getattr(mod_cls,get_func_name(step)) for step in steps})
                 toret = new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
             #_all_loaded_modules[name] = toret
             return toret

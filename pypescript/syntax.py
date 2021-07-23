@@ -135,7 +135,7 @@ def collapse_sections(di, maxdepth=None, sep=section_sep):
 
 class Decoder(UserDict):
 
-    def __init__(self, data=None, string=None, base_dir=None, parser=None):
+    def __init__(self, data=None, string=None, base_dir=None, parser=None, decode=True):
 
         self.parser = parser
         if parser is None:
@@ -146,7 +146,7 @@ class Decoder(UserDict):
         self.base_dir = '.'
         if isinstance(data,str):
             if string is None: string = ''
-            if base_dir is None: self.base_dir = os.path.dirname(data)
+            #if base_dir is None: self.base_dir = os.path.dirname(data)
             string += self.read_file(data)
         elif data is not None:
             data_ = dict(data)
@@ -156,7 +156,7 @@ class Decoder(UserDict):
 
         self.data = self.raw = data_
         self._cache = {}
-        self.decode()
+        if decode: self.decode()
 
 
     def read_file(self, filename):
@@ -178,7 +178,7 @@ class Decoder(UserDict):
         try:
             toret = callback(self.data,*keys)
         except KeyError as exc:
-            raise ParserError('Required key "{}" does not exit'.format(section_sep.join(keys))) from exc
+            raise ParserError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
         return toret
 
 
@@ -349,7 +349,7 @@ class Decoder(UserDict):
                     if fn in self._cache:
                         new = self._cache[fn]
                     else:
-                        new = self._cache[fn] = self.__class__(fn)
+                        new = self._cache[fn] = self.__class__(fn,decode=False)
                     if not fn_sections[1]: #path: => we retrieve the whole dict
                         toret = new.data
                     else:

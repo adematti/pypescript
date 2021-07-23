@@ -191,6 +191,26 @@ One can refer to values define in any part of the configuration file through the
 
 Here ``${answer.to}`` will be replaced by 42, and ``${the}`` by 84.
 Note that since ``(section, name)`` only fields are retained, the original ``the`` entry will be discarded in the rest of the pipeline.
+One can also refer to another configuration file, using the syntax: ``${path_to_other_file:answer.to}:``.
+
+Imports
+^^^^^^^
+
+.. code-block:: yaml
+
+  answer:
+    to: 42
+
+  the: 84
+
+  ultimate:
+    ${answer}:
+    to: 21
+    of: ${the}
+
+Here ``utimate`` will be filled with the elements of ``answer`` (``to: 42``), then ``ultimate.to`` will be replaced by 21.
+One can also import a section from another configuration file, using the syntax: ``${path_to_other_file:section}:``.
+To import the other configuration file completely, no section is specified: ``${path_to_other_file:}:``.
 
 Mapping (references)
 ^^^^^^^^^^^^^^^^^^^^
