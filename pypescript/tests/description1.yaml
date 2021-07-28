@@ -8,6 +8,7 @@ description: Template base likelihood
 long description: >
                   :class:`BaseLikelihood` extends :class:`~pypescript.BasePipeline`, hence is expected to run several modules to e.g. setup data and execute model.
                   Data vector data.y is set in the setup step.
+
                   The model model.y is read at each execute step and the corresponding likelihood.loglkl computed.
 
 setup input:

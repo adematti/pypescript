@@ -85,6 +85,27 @@ static int mapping_contains(PyObject *self, PyObject *key) {
   return PyBlockMapping_Contains((PyBlockMapping *) self, key);
 }
 
+
+PyObject * mapping_get(PyBlockMapping *self, PyObject *args, PyObject *kwds)
+{
+  // Return new references
+  PyObject *key = NULL, *default_value = NULL;
+  static char *kwlist[] = {"key", "default", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist, &key, &default_value))
+    return NULL;
+
+  if (PyBlockMapping_Contains(self, key) == 1) {
+    PyObject *value = mapping_getitem(self, key);
+    return value;
+  }
+  if (default_value == NULL) {
+    PyErr_Format(PyExc_KeyError, "Item %S does not exist", key);
+    return NULL;
+  }
+  Py_INCREF(default_value);
+  return default_value;
+}
+
 int PyBlockMapping_ParseSectionName(PyBlockMapping *self, PyObject * section, PyObject * name, PyObject ** true_section, PyObject ** true_name)
 {
   int toret = 1;
@@ -302,6 +323,7 @@ static PyMemberDef PyBlockMapping_members[] = {
 static PyMethodDef PyBlockMapping_methods[] = {
   {"keys", (PyCFunction) PyBlockMapping_Keys, METH_NOARGS, "Return keys"},
   {"items", (PyCFunction) PyBlockMapping_Items, METH_NOARGS, "Return items"},
+  {"get", (PyCFunction) mapping_get, METH_VARARGS | METH_KEYWORDS, "Return item"},
   {"update", (PyCFunction) mapping_update, METH_O, "Update BlockMapping"},
   {"copy", (PyCFunction) PyBlockMapping_Copy, METH_NOARGS, "Copy BlockMapping"},
   {"clear", (PyCFunction) mapping_clear, METH_NOARGS, "Clear BlockMapping"},

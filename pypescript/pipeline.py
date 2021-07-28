@@ -148,7 +148,9 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             module.set_config_block(config_block=self.config_block)
 
     def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
-        self.modules = [self.get_module_from_name(module) if isinstance(module,str) else module for module in modules]
+        self.modules = []
+        for module in modules:
+            self.modules.append(self.get_module_from_name(module) if isinstance(module,str) else module)
         setup_todos = setup_todos or []
         execute_todos = execute_todos or []
         cleanup_todos = cleanup_todos or []
@@ -300,7 +302,7 @@ class MPIPipeline(BasePipeline):
     logger = logging.getLogger('MPIPipeline')
     _available_options = BasePipeline._available_options + [syntax.iter,syntax.nprocs_per_task,syntax.configblock_iter,syntax.datablock_iter,syntax.datablock_key_iter]
 
-    def setup(self):
+    def set_iter(self):
         self._iter = self.options.get(syntax.iter,None)
         if self._iter is not None and np.ndim(self._iter) == 0:
             # most certainly the number of iterations
@@ -337,13 +339,19 @@ class MPIPipeline(BasePipeline):
                 self._datablock_bcast += tmp
             for key in self._datablock_bcast:
                 self._datablock_duplicate[key] = key
+
+    def setup(self):
+        self.set_iter()
         super(MPIPipeline,self).setup()
 
     def execute(self):
+        self.run_iter(self.execute_todos)
+
+    def run_iter(self, todos):
         """Execute :attr:`modules`."""
         pipe_block = self.pipe_block = self.data_block.copy()
         if self._iter is None:
-            for todo in self.execute_todos:
+            for todo in todos:
                 todo()
         else:
             key_to_ranks = {key:None for key in self._datablock_bcast}
@@ -359,7 +367,7 @@ class MPIPipeline(BasePipeline):
                         self.config_block[key] = value(task)
                     for key,value in self._datablock_iter.items():
                         self.pipe_block[key] = value(task)
-                    for todo in self.execute_todos:
+                    for todo in todos:
                         todo()
                     for keyg,keyl in self._datablock_key_iter.items():
                         key = keyl[itask]

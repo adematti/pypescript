@@ -30,6 +30,7 @@ def generate_rst_doc_table(rows, max_line_len=80):
     """
     rows = dict(rows)
     # first turn description into a list of lines
+    newline = '\n'
     def lines_callback(row):
         lines = []
         if isinstance(row,dict) and row:
@@ -44,7 +45,7 @@ def generate_rst_doc_table(rows, max_line_len=80):
                 lines.append([''])
         else:
             row = str(row)
-            if row.endswith('\n'): row = row[:-1]
+            if row.endswith(newline): row = row[:-1]
             lines.append([row])
         return lines
 
@@ -61,11 +62,20 @@ def generate_rst_doc_table(rows, max_line_len=80):
             phrase_len = len(line[-1]) + max_line_len - line_len # maximum allowed width for last column
             #words = line[-1].split(' ')
             #words = re.split(''' (?=(?:[^'"`]|`[^`]*`|'[^']*'|"[^"]*")*$)''',line[-1]) # does not split everything that is between quotes "" '' ``
-            words = re.split(''' (?=(?:[^`]|`[^`]*`)*$)''',line[-1]) # does not split everything that is between quotes ``
+            splits = re.split(''' (?=(?:[^`]|`[^`]*`)*$)''',line[-1]) # does not split everything that is between quotes ``
+            words = []
+            for split in splits:
+                tmp = split.split(newline)
+                li = [newline] * (len(tmp) * 2 - 1)
+                li[0::2] = tmp
+                words += li
+            print(words)
             phrases = [words[0]]
             for word in words[1:]: # stack words of last column phrase till they reach last column width
-                if len(word) + 1 + len(phrases[-1]) < phrase_len:
-                    phrases[-1] += ' ' + word
+                if word == newline:
+                    phrases.append('')
+                elif len(word) + 1 + len(phrases[-1]) < phrase_len:
+                    phrases[-1] += (' ' if phrases[-1] else '') + word
                 else:
                     phrases.append(word)
             #print(phrases)
