@@ -34,6 +34,10 @@ def test_demo1():
     assert pipeline.pipe_block[section_names.likelihood,'loglkl'] != loglkl
     pipeline.cleanup()
 
+    data = pipeline.fetch_module('like.data')
+    assert data.name == 'data'
+    assert data.fetch_module('main') is pipeline
+
     graph_fn = os.path.join(demo_dir,'inheritance.ps')
     #BaseModule.plot_inheritance_graph(graph_fn,exclude=['FlatModel'])
 

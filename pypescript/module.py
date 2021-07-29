@@ -114,6 +114,7 @@ class BaseModule(object,metaclass=MetaModule):
         self.set_config_block(options=options,config_block=config_block)
         self.set_data_block(data_block=data_block)
         self._cache = {}
+        self._pipeline = None
 
     def set_config_block(self, options=None, config_block=None):
         """
@@ -198,6 +199,21 @@ class BaseModule(object,metaclass=MetaModule):
     def __str__(self):
         """String as module class name + module local name (in this pipeline)."""
         return '{} [{}]'.format(self.__class__.__name__,self.name)
+
+    def fetch_module(self, path=''):
+        """Fetch module/pipeline given (dot-separated) path."""
+        names = path.split('.')
+        module = self
+        if names[0] == syntax.main: # start from root
+            while module._pipeline is not None:
+                module = module._pipeline
+            assert module.name == syntax.main
+            names = names[1:] # we are in main, skip it
+        for name in names:
+            if not hasattr(module,'modules'):
+                raise ValueError('{} is not a pipeline'.format(module.name))
+            module = module.modules[name]
+        return module
 
     @classmethod
     def from_filename(cls, name='module', options=None, config_block=None, data_block=None):

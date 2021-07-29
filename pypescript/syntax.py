@@ -308,6 +308,7 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        # decode config_block mapping
         def callback(di):
             toret = {}
             for key,value in list(di.items()):

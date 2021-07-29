@@ -110,7 +110,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         setup_todos = setup or []
         execute_todos = execute or []
         cleanup_todos = cleanup or []
-        self.modules = []
+        self.modules = {} # because set_config_block will be called by __init__
         #self._datablock_bcast = []
         super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block,description=description)
         # modules will automatically inherit config_block, pipe_block, no need to reset set_config_block() and set_data_block()
@@ -142,10 +142,11 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         self._datablock_duplicate = BlockMapping(datablock_duplicate,sep=syntax.section_sep)
         #for key in self._datablock_bcast:
         #    self._datablock_duplicate[key] = key
-        for module in self.modules:
+        for module in self.modules.values():
             self.config_block.update(module.config_block)
-        for module in self.modules:
+        for module in self.modules.values():
             module.set_config_block(config_block=self.config_block)
+            module._pipeline = self # hook
 
     def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
         self.modules = []
@@ -207,6 +208,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
                 self.setup_todos.append(ModuleTodo(self,module,funcnames=syntax.setup_function))
                 self.execute_todos.append(ModuleTodo(self,module,funcnames=syntax.execute_function))
                 self.cleanup_todos.append(ModuleTodo(self,module,funcnames=syntax.cleanup_function))
+        self.modules = dict(zip(module_names,self.modules))
 
     def get_module_from_name(self, name):
         options = SectionBlock(self.config_block,name)
@@ -242,10 +244,10 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             graph.add_node(norm_name(module),color='lightskyblue',style='filled',group='pipeline',shape='box')
             graph.add_edge(norm_name(module),norm_name(prevmodule),color='lightskyblue',style='bold',arrowhead='none')
             if isinstance(module,BasePipeline):
-                for newmodule in module.modules:
+                for newmodule in module.modules.values():
                     callback(newmodule,module)
 
-        for module in self.modules:
+        for module in self.modules.values():
             callback(module,self)
 
         graph.layout('dot')
