@@ -1,0 +1,16 @@
+global$(%): 'test$%'
+
+hello:
+  world: ['answer$(1)','answer$(2)',test%(2)]
+  #world: ['answer$(1)']
+  other: ${global$(1)}
+
+answer$(%):
+  is: another$(%)
+  #is: $%
+
+another$(%):
+  is: $%
+
+another2:
+  is: 2

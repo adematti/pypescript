@@ -30,11 +30,19 @@ def test_syntax():
     """
     decoded = Decoder('config.yaml')
     la = decoded.pop('mylambda')
-    assert decoded.data == {'hello': {'answer': {'to': 42, 'the': 44}, 'world': 42, 'answer2': 44,
-    'localpath': 'myglobalpath', syntax.module_name: 'hello'}, 'testdict': {'a':{'b':{'c': 42}}},
-    'path': 'myglobalpath', 'mynumber': 42, 'world': {'test': ['myglobalpath/tmp.fits','myglobalpath/tmp.fits']}}
+    assert decoded.data == {'hello': {'answer': {'to': 42, 'the': 44}, 'world': 42, 'answer2': 44, 'localpath': 'myglobalpath', '$module_name': 'hello'},
+                            'testdict': {'a': {'b': {'c': 42}}}, 'path': 'myglobalpath', 'mynumber': 42, 'world': {'test': ['myglobalpath/tmp.fits', 'myglobalpath/tmp.fits']},
+                            'testrepeat': {'world': ['answer1', 'answer2'], 'other': 'test1'}, 'answer1': {'is': 'another1'}, 'another1': {'is': '1'}, 'answer2': {'is': 'another2'},
+                            'another2': {'is': '2'}, 'global1': 'test1'}
+
     assert decoded.mapping == {('world','answer3'):('hello','answer2')}
     assert la(2) == (88,'hello')
+
+
+def test_repeat():
+    decoded = Decoder('config3.yaml')
+    assert decoded.data == {'hello': {'world': ['answer1', 'answer2', 'test%(2)'], 'other': 'test1'}, 'answer1': {'is': 'another1'},
+                            'another1': {'is': '1'}, 'answer2': {'is': 'another2'}, 'another2': {'is': 2}, 'global1': 'test1'}
 
 
 if __name__ == '__main__':
@@ -42,3 +50,4 @@ if __name__ == '__main__':
     setup_logging()
     test_base_class()
     test_syntax()
+    test_repeat()

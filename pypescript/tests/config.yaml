@@ -16,3 +16,16 @@ world:
   answer3: $&{hello.answer2}
   #answer3: 42
   test: ["f'${hello.localpath}/tmp.fits'", "f'${hello.localpath}/tmp.fits'"]
+
+testrepeat:
+  world: ['answer$(1)','answer$(2)']
+  #world: ['answer$(1)']
+  other: ${global$(1)}
+
+answer$(%):
+  is: another$(%)
+
+global$(%): 'test$%'
+
+another$(%):
+  is: $%

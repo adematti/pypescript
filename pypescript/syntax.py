@@ -12,6 +12,7 @@ from . import section_names
 keyword_re_pattern = re.compile('\$(.*?)$')
 replace_re_pattern = re.compile('\${(.*?)}')
 mapping_re_pattern = re.compile('\$\&{(.*?)}')
+repeat_re_pattern = re.compile('.*\$\((.*?)\)')
 
 datablock_duplicate_re_pattern = re.compile('\$\[(.*?)\]')
 datablock_mapping_re_pattern = re.compile('\$\&\[(.*?)\]')
@@ -133,6 +134,23 @@ def collapse_sections(di, maxdepth=None, sep=section_sep):
     return toret
 
 
+def _search_in_dict(di, *keys):
+
+    if len(keys) == 0:
+        return di
+
+    def callback(data, key, *keys):
+        if len(keys) == 0:
+            return data[key]
+        return callback(data[key],*keys)
+
+    try:
+        toret = callback(di,*keys)
+    except KeyError as exc:
+        raise ParserError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
+    return toret
+
+
 class Decoder(UserDict):
 
     def __init__(self, data=None, string=None, base_dir=None, parser=None, decode=True):
@@ -166,20 +184,7 @@ class Decoder(UserDict):
 
 
     def search(self, *keys):
-
-        if len(keys) == 0:
-            return self.data
-
-        def callback(data, key, *keys):
-            if len(keys) == 0:
-                return data[key]
-            return callback(data[key],*keys)
-
-        try:
-            toret = callback(self.data,*keys)
-        except KeyError as exc:
-            raise ParserError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
-        return toret
+        return _search_in_dict(self.data,*keys)
 
 
     def decode(self):
@@ -207,6 +212,40 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        # then expand repeats
+        def callback(fulldi, keys=None, placeholder=None):
+            keys = keys or []
+            oldkeys = set()
+            di = _search_in_dict(fulldi,*keys)
+            isscalar = not isinstance(di,(dict,list))
+            if isscalar: # di not necessarily dict, if e.g. global: value
+                di = [di]
+            items = list(di.items()) if isinstance(di,dict) else list(enumerate(di))
+            for key,value in items:
+                repeat = self.decode_repeat(value,placeholder=placeholder)
+                if repeat is None:
+                    di[key] = value
+                elif isinstance(repeat,str):
+                    di[key] = repeat
+                else:
+                    newvalue,newkey,rootkey,placeholder = repeat
+                    di[key] = newvalue
+                    fulldi[newkey] = copy.deepcopy(fulldi[rootkey])
+                    oldkeys |= set([rootkey])
+                    oldkeys |= callback(fulldi,[newkey],placeholder=placeholder)
+                if isinstance(di[key],(dict,list)):
+                    oldkeys |= callback(fulldi,keys + [key],placeholder=placeholder)
+            if isscalar:
+                tmp = fulldi
+                for key in keys[:-1]:
+                    tmp = fulldi[key]
+                tmp[keys[-1]] = di[0]
+            return oldkeys
+
+        oldkeys = callback(self.data)
+        for key in oldkeys:
+            del self.data[key]
+
         def callback(di):
             toret = {}
             for key,value in di.items():
@@ -228,24 +267,9 @@ class Decoder(UserDict):
         self.data = callback(self.data)
 
         def callback(di):
-            if isinstance(di,list):
-                toret = []
-                for value in di:
-                    if isinstance(value,(dict,list)):
-                        toret.append(callback(value))
-                        continue
-                    decode = self.decode_format(value)
-                    if decode is not None:
-                        toret.append(decode)
-                        continue
-                    decode = self.decode_eval(value)
-                    if decode is not None:
-                        toret.append(decode)
-                        continue
-                    toret.append(value)
-                return toret
-            toret = {}
-            for key,value in di.items():
+            toret = di.copy()
+            items = list(di.items()) if isinstance(di,dict) else list(enumerate(di))
+            for key,value in items:
                 if isinstance(value,(dict,list)):
                     toret[key] = callback(value)
                     continue
@@ -336,6 +360,28 @@ class Decoder(UserDict):
                 except KeyError:
                     raise KeywordError(word)
 
+    def decode_repeat(self, word, placeholder=None):
+        if isinstance(word,str):
+            m = re.match(repeat_re_pattern,word)
+            if m:
+                value = m.group(1)
+                if value == '%':
+                    if placeholder is None:
+                        return
+                    return self.decode_repeat(word.replace('$(%)','$({})'.format(placeholder)),placeholder=None)
+                newword = word.replace('$({})'.format(value),value)
+                newkey = newword
+                if re.match(replace_re_pattern,newword):
+                    word = re.match(replace_re_pattern,word).group(1)
+                    newkey = word.replace('$({})'.format(value),value)
+                if newkey in self.data: # nothing else to do
+                    return newword
+                key_pattern = word.replace('$({})'.format(value),'$(%)')
+                for key in self.data:
+                    if key == key_pattern:
+                        return newword, newkey, key, value
+            if placeholder is not None:
+                return word.replace('$%',placeholder)
 
     def decode_replace(self, word):
         if isinstance(word,str):

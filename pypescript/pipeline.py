@@ -149,9 +149,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             module._pipeline = self # hook
 
     def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
-        self.modules = []
-        for module in modules:
-            self.modules.append(self.get_module_from_name(module) if isinstance(module,str) else module)
+        self.modules = self.get_modules(modules)
         setup_todos = setup_todos or []
         execute_todos = execute_todos or []
         cleanup_todos = cleanup_todos or []
@@ -209,6 +207,22 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
                 self.execute_todos.append(ModuleTodo(self,module,funcnames=syntax.execute_function))
                 self.cleanup_todos.append(ModuleTodo(self,module,funcnames=syntax.cleanup_function))
         self.modules = dict(zip(module_names,self.modules))
+
+    def get_modules(self, modules):
+        toret = []
+        for module in modules:
+            module_names = [module.name for module in toret]
+            if isinstance(module,str):
+                module_name = module
+            else:
+                module_name = module.name
+            if module_name in module_names:
+                toret.append(toret[module_names.index(module)])
+            else:
+                if isinstance(module,str):
+                    module = self.get_module_from_name(module)
+                toret.append(module)
+        return toret
 
     def get_module_from_name(self, name):
         options = SectionBlock(self.config_block,name)
