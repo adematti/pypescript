@@ -172,7 +172,7 @@ To summarise:
 Configuration file shortcuts
 ----------------------------
 
-For rapid scripting, a number of configuration file shortcuts have been defined.
+For rapid and convenient scripting, a number of configuration file shortcuts have been defined.
 
 Replacements
 ^^^^^^^^^^^^
@@ -195,7 +195,6 @@ One can also refer to another configuration file, using the syntax: ``${path_to_
 
 Imports
 ^^^^^^^
-
 .. code-block:: yaml
 
   answer:
@@ -257,6 +256,40 @@ Here is the corresponding syntax:
 The entry ``(ultimate, question)`` will be filled with the string 'plots/my_plot.png'.
 The eval syntax produces the same output in ``(ultimate, answer)`` but is more verbose.
 
+
+Repeats
+^^^^^^^
+One can generate on-the-fly configuration with the syntax "$(%)":
+
+.. code-block:: yaml
+
+  main:
+    modules: [model$(1), model$(2)]
+
+  model$(%):
+    modules: [base$(%)]
+
+  base$(%):
+    value: e'%$ + 1'
+
+is equivalent to:
+
+.. code-block:: yaml
+
+  main:
+    modules: [model1, model2]
+
+  model1:
+    modules: [base1]
+
+  base1:
+    value: 2
+
+  model2:
+    modules: [base2]
+
+  base2:
+    value: 3
 
 data_block operations
 ^^^^^^^^^^^^^^^^^^^^^

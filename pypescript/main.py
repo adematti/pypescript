@@ -16,6 +16,12 @@ def main(config_block=None, pipe_graph_fn=None, data_block=None, save_data_block
 
     pipe_graph_fn : string, default=None
         If not ``None``, path where to save pipeline graph.
+
+    data_block : DataBlock, default=None
+        Structure containing data exchanged between modules. If ``None``, creates one.
+
+    save_data_block : string, default=None
+        If not ``None``, path where to save pipeline ``pipe_block``.
     """
     pipeline = BasePipeline(config_block=config_block,data_block=data_block)
     if pipe_graph_fn is not None:

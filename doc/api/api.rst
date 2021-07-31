@@ -1,27 +1,33 @@
 API
 ===
 
-Main
+main
 ----
 .. automodule:: pypescript.main
   :members:
   :show-inheritance:
 
-Block module
+block module
 ------------
 .. automodule:: pypescript.block
   :members:
   :show-inheritance:
 
-Config module
+config module
 -------------
 .. automodule:: pypescript.config
   :members:
   :show-inheritance:
 
-Module module
+module module
 -------------
 .. automodule:: pypescript.module
+  :members:
+  :show-inheritance:
+
+pipeline module
+---------------
+.. automodule:: pypescript.pipeline
   :members:
   :show-inheritance:
 

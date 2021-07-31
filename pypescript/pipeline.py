@@ -1,3 +1,5 @@
+"""Definition of :class:`BasePipeline` and subclasses."""
+
 import os
 import logging
 import subprocess
@@ -13,7 +15,23 @@ from .config import ConfigBlock, ConfigError
 
 class ModuleTodo(object):
 
+    """Helper class to run module :meth:`BaseModule.setup`, :meth:`BaseModule.execute` and :meth:`BaseModule.cleanup`."""
+
     def __init__(self, pipeline, module, funcnames=None):
+        """
+        Instantiate :class:`ModuleTodo`.
+
+        Parameters
+        ----------
+        pipeline : BasePipeline
+            Pipeline instance that will call :class:`ModuleTodo` instance.
+
+        module : BaseModule
+            Module to run.
+
+        funcnames : string, list, default=None
+            List of ``module`` methods to call.
+        """
         self.pipeline = pipeline
         self.module = module
         if isinstance(funcnames,str):
@@ -22,27 +40,41 @@ class ModuleTodo(object):
         self.func = [getattr(module,funcname) for funcname in self.funcnames]
 
     def __repr__(self):
-        return 'ModuleToDo(pipeline=[{}],module=[{}],funcnames={})'.format(self.pipeline.name,self.module.name,self.funcnames)
+        return 'ModuleTodo(pipeline=[{}],module=[{}],funcnames={})'.format(self.pipeline.name,self.module.name,self.funcnames)
 
     def set_data_block(self):
+        """Set module :attr:`BaseModule.data_block` to :attr:`BasePipeline.pipe_block`."""
         self.module.set_data_block(self.pipeline.pipe_block)
 
     def compute(self):
+        """Call module methods."""
         for func in self.func:
             func()
 
     def __call__(self):
+        """Run module: set :attr:`BaseModule.data_block` and call module methods."""
         self.set_data_block()
         self.compute()
 
 
 class MetaPipeline(MetaModule):
 
-    def set_functions(cls, functions):
+    """Meta class to replace :meth:`setup`, :meth:`execute` and :meth:`cleanup` pipeline methods."""
 
+    def set_functions(cls, functions):
         """
-        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
-        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
+        Wrap input ``functions`` and add corresponding methods to class ``cls``.
+        Specifically:
+
+        - before ``functions`` calls, fills in :attr:`BasePipeline.data_block` with values specified in :attr:`BasePipeline._datablock_set`
+        - after ``functions`` calls, copy entries of :attr:`BasePipeline.pipe_block` into :attr:`BasePipeline.data_block`
+          with key pairs specified in :attr:`BasePipeline._datablock_duplicate`
+        - exceptions occuring in ``functions`` calls are complemented with module class and local name, for easy debugging
+
+        Parameters
+        ----------
+        functions : dict
+            Dictionary of function name: callable.
         """
         def make_wrapper(name, fun):
             def wrapper(self):
@@ -82,7 +114,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
 
     def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, description=None, modules=None, setup=None, execute=None, cleanup=None):
         """
-        Initalise :class:`BasePipeline`.
+        Initalize :class:`BasePipeline`.
 
         Parameters
         ----------
@@ -105,6 +137,18 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
 
         modules : list, default=None
             List of modules, which will be completed by those in 'setup', 'execute' and 'cleanup' entries of options.
+
+        setup : list, default=None
+            List of 'module.method' (``method`` being one of ('setup', 'execute', 'cleanup')) strings.
+            If ``method`` not specified, defaults to :meth:`BaseModule.setup`.
+
+        execute : list, default=None
+            List of 'module.method' (``method`` being one of ('setup', 'execute', 'cleanup')) strings.
+            If ``method`` not specified, defaults to :meth:`BaseModule.execute`.
+
+        cleanup : list, default=None
+            List of 'module.method' (``method`` being one of ('setup', 'execute', 'cleanup')) strings.
+            If ``method`` not specified, defaults to :meth:`BaseModule.cleanup`.
         """
         modules = modules or []
         setup_todos = setup or []
@@ -123,6 +167,24 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         self.set_config_block(config_block=self.config_block)
 
     def set_config_block(self, options=None, config_block=None):
+        """
+        Set :attr:`config_block` and :attr:`options`.
+        :attr:`config_block` is updated by that of all :attr:`modules`, then the resulting
+        block is set in all :attr:`modules`.
+        Also sets:
+        
+        - :attr:`_datablock_set`, dictionary of (key, value) to set into :attr:`data_block`
+        - :attr:`_datablock_mapping`, :class:`BlockMapping` instance that maps :attr:`data_block` entries to others
+        - :attr:'_datablock_duplicate', :class:`BlockMapping` instance used to duplicate :attr:`data_block` entries
+
+        Parameters
+        ----------
+        options : SectionBlock, dict, default=None
+            Options for this module, which update those in ``config_block``.
+
+        config_block : DataBlock, dict, string, default=None
+            Structure containing configuration options, which will be updated with ``options``.
+        """
         #super(BasePipeline,self).set_config_block(options=options,config_block=config_block)
         self.config_block = ConfigBlock(config_block)
         if options is not None:
@@ -149,6 +211,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             module._pipeline = self # hook
 
     def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
+        """Prepare :class:`ModuleTodo` instances for setup, execute, and cleanup."""
         self.modules = self.get_modules(modules)
         setup_todos = setup_todos or []
         execute_todos = execute_todos or []
@@ -209,6 +272,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         self.modules = dict(zip(module_names,self.modules))
 
     def get_modules(self, modules):
+        """Return list of :class:`BaseModule` instances, given list of module (pipeline) names or :class:`BaseModule`."""
         toret = []
         for module in modules:
             module_names = [module.name for module in toret]
@@ -225,23 +289,24 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         return toret
 
     def get_module_from_name(self, name):
+        """Return :class:`BaseModule` instance corresponding to module (pipeline) name."""
         options = SectionBlock(self.config_block,name)
         return BaseModule.from_filename(name=name,options=options,config_block=self.config_block,data_block=self.pipe_block)
 
     def setup(self):
-        """Set up :attr:`modules`."""
+        """Set up :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
         self.pipe_block = self.data_block.copy()
         for todo in self.setup_todos:
             todo()
 
     def execute(self):
-        """Execute :attr:`modules`."""
+        """Execute :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
         self.pipe_block = self.data_block.copy()
         for todo in self.execute_todos:
             todo()
 
     def cleanup(self):
-        """Clean up :attr:`modules`."""
+        """Clean up :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
         self.pipe_block = self.data_block.copy()
         for todo in self.cleanup_todos:
             todo()
@@ -271,14 +336,8 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
 
 
 class StreamPipeline(BasePipeline):
-    """
-    Extend :class:`BaseModule` to load, set up, execute, and clean up several modules without copying :attr:`data_block`.
+    """Extend :class:`BasePipeline` to load, set up, execute, and clean up several modules without copying :attr:`data_block`."""
 
-    Attributes
-    ----------
-    modules : list
-        List of modules.
-    """
     def setup(self):
         """Set up :attr:`modules`."""
         self.pipe_block = self.data_block
@@ -298,7 +357,7 @@ class StreamPipeline(BasePipeline):
             todo()
 
 
-def _make_callable_array(array):
+def _make_callable_from_array(array):
 
     def func(i):
         return array[i]
@@ -308,12 +367,25 @@ def _make_callable_array(array):
 
 class MPIPipeline(BasePipeline):
     """
-    Extend :class:`BaseModule` to load, set up, execute, and clean up several modules in parallel with MPI.
+    Extend :class:`BasePipeline` to execute several modules in parallel with MPI.
 
     Attributes
     ----------
-    modules : list
-        List of modules.
+    nprocs_per_task : int
+        Number of processes for each task.
+
+    _iter : list, iterator
+        Tasks to iterate on in the :meth:`execute` step.
+
+    _configblock_iter : dict
+        Mapping of :attr:`config_block` entry to list of values for all iterations.
+
+    _datablock_iter : dict
+        Mapping of :attr:`data_block` entry to list of values for all iterations.
+
+    _datablock_key_iter : dict
+        Mapping of :attr:`data_block` entry, to list of :attr:`data_block` keys,
+        pointing to the :attr:`data_block` entry the where to store result for all iterations.
     """
     logger = logging.getLogger('MPIPipeline')
     _available_options = BasePipeline._available_options + [syntax.iter,syntax.nprocs_per_task,syntax.configblock_iter,syntax.datablock_iter,syntax.datablock_key_iter]
@@ -335,7 +407,7 @@ class MPIPipeline(BasePipeline):
                         self._iter = range(len(value))
                     if not len(value) == len(self._iter):
                         raise ConfigError('{} {} list must be of the same length as iter = {:d}.'.format(block_keyword,key,len(self._iter)))
-                    value = _make_callable_array(value)
+                    value = _make_callable_from_array(value)
                 elif not callable(value):
                     raise TypeError('Incorrect {} value: {}.'.format(block_keyword,value))
                 block_iter[key] = value
@@ -357,14 +429,16 @@ class MPIPipeline(BasePipeline):
                 self._datablock_duplicate[key] = key
 
     def setup(self):
+        """Set up :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
         self.set_iter()
         super(MPIPipeline,self).setup()
 
     def execute(self):
+        """Execute :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`, for all iterations."""
         self.run_iter(self.execute_todos)
 
     def run_iter(self, todos):
-        """Execute :attr:`modules`."""
+        """Run list of :class:`ModuleTodo` for all iterations."""
         pipe_block = self.pipe_block = self.data_block.copy()
         if self._iter is None:
             for todo in todos:
@@ -432,12 +506,32 @@ class MPIPipeline(BasePipeline):
 
 class BatchError(Exception):
 
-    pass
+    """Exception raised when issue with batch job."""
 
 
 
 class BatchPipeline(MPIPipeline):
+    """
+    Extend :class:`MPIPipeline` to execute a subpipeline with a batch job.
 
+    Attributes
+    ----------
+    job_dir : string
+        Directory path where to save config files, :class:`DataBlock` instance and possibly batch submission script for each job.
+
+    mpiexec : string
+        Name of MPI executable. Used when :attr:`job_template` not provided.
+
+    job_template : string
+        Template for job submission scripts.
+        Should contain patterns ``{command}`` for command, and :attr:`job_options` keys.
+
+    job_submit : string
+        Command to submit job.
+
+    job_options : dict
+        Options for job.
+    """
     logger = logging.getLogger('BatchPipeline')
     _available_options = MPIPipeline._available_options + [syntax.mpiexec,syntax.hpc_job_dir,syntax.hpc_job_submit,syntax.hpc_job_template,syntax.hpc_job_options]
 
@@ -445,13 +539,12 @@ class BatchPipeline(MPIPipeline):
         super(BatchPipeline,self).__init__(*args,**kwargs)
         setup_modules = [todo.module for todo in self.setup_todos]
         cleanup_modules = [todo.module for todo in self.cleanup_todos]
-        self.module_names = []
         for todo in self.execute_todos:
             if todo.module in setup_modules or todo.module in cleanup_modules:
                 raise ConfigError('{} requires module [{}] to run entirely (setup, execute, cleanup) in the pipeline execute step.'.format(self.__class__.__name__,todo.module.name))
-            self.module_names.append(todo.module.name)
 
     def setup(self):
+        """Set up :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
         self.job_dir = self.options.get_string(syntax.hpc_job_dir,'job_dir')
         self.mpiexec = self.options.get_string(syntax.mpiexec,'mpiexec')
         template_fn = self.options.get_string(syntax.hpc_job_template,None)
@@ -465,7 +558,14 @@ class BatchPipeline(MPIPipeline):
         super(BatchPipeline,self).setup()
 
     def find_file_task(self, filetype, itask=None):
-        if filetype in ['config_block']:
+        """
+        Return file name for task number ``itask`` corresponding to ``filetype``:
+        - config_block: :attr:`iconfig_block` (:attr:`config_block` for this task)
+        - data_block: :class:`ipipe_block` (:attr:`pipe_block` for this task)
+        - save_data_block: :class:`pipe_block` output by execution of subpipeline
+        - job: job submission script
+        """
+        if filetype == 'config_block':
             base, ext = filetype, 'yaml'
         elif filetype in ['data_block','save_data_block']:
             base, ext = filetype, 'npy'
@@ -481,9 +581,11 @@ class BatchPipeline(MPIPipeline):
 
     @property
     def is_datablock_saved(self):
+        """Save :class:`DataBlock` instance only if items to be propagated in :attr:`data_block`."""
         return len(self._datablock_duplicate)
 
     def execute_task(self, itask=0):
+        """Execute single task number ``itask``: either using the command line, or by executing a job script (if ``job_template`` is provided)."""
         config_block_fn = self.find_file_task('config_block',itask=itask)
         data_block_fn = self.find_file_task('data_block',itask=itask)
         self.iconfig_block.save_yaml(config_block_fn)
@@ -494,7 +596,7 @@ class BatchPipeline(MPIPipeline):
         if self.mpiexec is not None and self.nprocs_per_task > 1:
             command = '{} -n {:d} {}'.format(self.mpiexec,self.nprocs_per_task,command)
         if self.job_template is not None:
-            template = self.job_template.replace(command=command,**self.job_options)
+            template = self.job_template.format(command=command,**self.job_options)
             template_fn = self.find_file_task('job',itask=itask)
             with open(template_fn,'w') as file:
                 file.write(template)
@@ -505,6 +607,11 @@ class BatchPipeline(MPIPipeline):
         self.log_info('Output is:\n{}'.format(output),rank=0)
 
     def load_task(self, itask=0):
+        """
+        Load subpipeline output :class:`DataBlock` instance for task number ``itask`` from disk.
+        If not asked to be saved, return ``None``.
+        Else, if :class:`DataBlock` does not exist on disk, raise a :class:`BatchError`.
+        """
         data_block = None
         if self.is_datablock_saved:
             try:
@@ -514,6 +621,7 @@ class BatchPipeline(MPIPipeline):
         return data_block
 
     def execute(self):
+        """Execute subpipeline for each task, either using the command line, or by executing a job script (if ``job_template`` is provided)."""
         self.iconfig_block = self.config_block.copy()
         options = {}
         options[syntax.execute] = [syntax.join_sections((todo.module.name,funcname)) for todo in self.execute_todos for funcname in todo.funcnames]

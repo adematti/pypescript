@@ -9,7 +9,7 @@ from .syntax_description import Decoder, YamlLoader
 
 class ModuleDescription(UserDict):
 
-    """This class handles module descriptions."""
+    """This class handles module description."""
 
     _file_extension = '.yaml'
 
@@ -32,6 +32,9 @@ class ModuleDescription(UserDict):
 
         parser : callable
             Parser which turns a string into a dictionary.
+
+        kwargs : dict
+            Arguments for :class:`syntax_description.Decoder`.
         """
         if isinstance(data,ModuleDescription):
             self.__dict__.update(data)
@@ -44,6 +47,19 @@ class ModuleDescription(UserDict):
 
     @classmethod
     def load(cls, filename, **kwargs):
+        """
+        Load a :class:`ModuleDescription` instance from ``filename``.
+        If several descriptions are found in the same *yaml* file (i.e. separated by a horizontal ``---`` line),
+        return corresponding :class:`ModuleDescription` instances.
+
+        Parameters
+        ----------
+        filename : string
+            Description file name.
+
+        kwargs : dict
+            Arguments for :class:`ModuleDescription`.
+        """
         with open(filename,'r') as file:
             descriptions = list(yaml.load_all(file,Loader=YamlLoader))
         if len(descriptions) > 1:
@@ -67,10 +83,12 @@ class ModuleDescription(UserDict):
 
     @classmethod
     def filename_from_module(cls, module):
+        """Return *yaml* description file name corresponding to Python module ``module``."""
         return os.path.join(os.path.dirname(module.__file__), module.__name__.split('.')[-1] + cls._file_extension)
 
     @classmethod
     def from_module(cls, module):
+        """Return :class:`ModuleDescription` instance(s) corresponding to Python module ``module``, if they exist; else return ``None``."""
         filename = cls.filename_from_module(module)
         if os.path.isfile(filename):
             return cls.load(filename)

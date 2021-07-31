@@ -1,4 +1,4 @@
-"""A few utilities."""
+"""A few utilities to walk through the **pypescript** library modules."""
 
 import os
 import re
@@ -14,7 +14,28 @@ def mkdir(filename):
 
 
 def read_path_list(filename):
-    """Read list of bash-formatted paths."""
+    """
+    Parse list of module names into modules to be included/excluded.
+
+    Parameters
+    ----------
+    filename : string
+        File name of module list. This should respect the bash-syntax,
+        except separators are dots.
+
+    Returns
+    -------
+    include : list
+        List of module name ``re`` patterns to include.
+
+    exclude:
+        List of module name ``re`` patterns to exclude.
+
+    Example
+    -------
+    To include modules in directory ``dir``, write ``dir.*``.
+    To exclude modules in directory ``dir`` starting with ``mod``, write ``dir.mod*``.
+    """
     import fnmatch
     include, exclude = [], []
 

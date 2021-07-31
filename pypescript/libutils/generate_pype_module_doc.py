@@ -69,7 +69,7 @@ def generate_rst_doc_table(rows, max_line_len=80):
                 li = [newline] * (len(tmp) * 2 - 1)
                 li[0::2] = tmp
                 words += li
-            print(words)
+            #print(words)
             phrases = [words[0]]
             for word in words[1:]: # stack words of last column phrase till they reach last column width
                 if word == newline:
@@ -166,6 +166,12 @@ def generate_pype_modules_rst_doc(section_underline='-',max_line_len=80, **kwarg
 
     Parameters
     ----------
+    section_underline : string, default='='
+        Section underline.
+
+    max_line_len : int, default=80
+        Max table line length. See :func:`generate_rst_doc_table`.
+
     kwargs : dict
         Arguments for :func:`utils.walk_pype_modules`.
 
@@ -202,7 +208,7 @@ def write_pype_modules_rst_doc(filename, header='', title='Modules', title_under
     title : string, default='Modules'
         Title.
 
-    underline : string, default='='
+    title_underline : string, default='='
         Title underline.
 
     kwargs : dict

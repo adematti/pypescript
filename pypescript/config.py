@@ -62,7 +62,9 @@ class ConfigBlock(DataBlock):
         new.raw = self.raw
         return new
 
-    copy = __copy__
+    def copy(self):
+        """Return shallow copy of ``self``."""
+        return self.__copy__()
 
     def __repr__(self):
         return 'ConfigBlock(data={}, mapping={})'.format(self.data,self.mapping)

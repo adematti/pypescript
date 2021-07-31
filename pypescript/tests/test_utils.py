@@ -41,8 +41,8 @@ def test_syntax():
 
 def test_repeat():
     decoded = Decoder('config3.yaml')
-    assert decoded.data == {'hello': {'world': ['answer1', 'answer2', 'test%(2)'], 'other': 'test1'}, 'answer1': {'is': 'another1'},
-                            'another1': {'is': '1'}, 'answer2': {'is': 'another2'}, 'another2': {'is': 2}, 'global1': 'test1'}
+    assert decoded.data == {'hello': {'world': ['answer1', 'answer2', 'test%(2)'], 'other': 'test1'}, 'answer1': {'is': ['another1']},
+                            'another1': {'is': '1'}, 'answer2': {'is': ['another2']}, 'another2': {'is': 2}, 'global1': 'test1'}
 
 
 if __name__ == '__main__':

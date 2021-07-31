@@ -28,7 +28,6 @@ class CurrentMPIComm(object):
         Decorator to attach the current MPI communicator to the input
         keyword arguments of ``func``, via the ``mpicomm`` keyword.
         """
-
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             kwargs.setdefault('mpicomm', None)
@@ -42,7 +41,7 @@ class CurrentMPIComm(object):
     @contextmanager
     def enter(cls, mpicomm):
         """
-        Enters a context where the current default MPI communicator is modified to the
+        Enter a context where the current default MPI communicator is modified to the
         argument `comm`. After leaving the context manager the communicator is restored.
 
         Example:
@@ -87,31 +86,21 @@ class CurrentMPIComm(object):
 
     @classmethod
     def get(cls):
-        """
-        Get the default current MPI communicator. The initial value is ``MPI.COMM_WORLD``.
-        """
+        """Get the default current MPI communicator. The initial value is ``MPI.COMM_WORLD``."""
         return cls._stack[-1]
-
-    @classmethod
-    def set(cls, mpicomm):
-        """
-        Set the current MPI communicator to the input value.
-        """
-        warnings.warn('CurrentMPIComm.set is deprecated. Use `with CurrentMPIComm.enter(mpicomm):` instead')
-        cls._stack[-1].barrier()
-        cls._stack[-1] = mpicomm
-        cls._stack[-1].barrier()
 
 
 
 class CurrentMPIState(object):
 
+    """
+    Descriptor for current MPI state of a Python class.
+    - BROADCAST : class "content" (e.g. arrays) broadcast on all ranks
+    - SCATTERED : class content scattered on all ranks
+    - GATHERED : class content gathered on root rank.
+    """
     strs = ['BROADCAST','SCATTERED','GATHERED']
     ints = list(range(len(strs)))
-
-    @classmethod
-    def as_str(cls, mpistate):
-        return cls.strs[mpistate]
 
     def __new__(cls, mpistate):
         if isinstance(mpistate,str):
@@ -119,6 +108,10 @@ class CurrentMPIState(object):
         if mpistate not in cls.ints:
             raise MPIError('Unknown MPI state {}; shoud be in {} or {}.'.format(mpistate,cls.strs,cls.ints))
         return mpistate
+
+    @classmethod
+    def as_str(cls, mpistate):
+        return cls.strs[mpistate]
 
 
 for i,s in zip(CurrentMPIState.ints,CurrentMPIState.strs):
@@ -128,10 +121,12 @@ for i,s in zip(CurrentMPIState.ints,CurrentMPIState.strs):
 
 class MPIError(Exception):
 
-    pass
+    """Exception raised when issue with MPI operations."""
 
 
 def MPIInit(func):
+
+    """:meth:`__init__()` decorator that sets MPI attributes: :attr:`mpiroot`, :attr:`mpicomm` and :attr:`mpistate`."""
 
     @functools.wraps(func)
     @CurrentMPIComm.enable
@@ -146,6 +141,8 @@ def MPIInit(func):
 
 def MPIScatter(func):
 
+    """:meth:`mpi_scatter` decorator that checks whether class is already scattered before scattering, then sets :attr:`mpistate`."""
+
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         if self.mpistate == CurrentMPIState.SCATTERED:
@@ -157,6 +154,8 @@ def MPIScatter(func):
 
 
 def MPIGather(func):
+
+    """:meth:`mpi_gather` decorator that checks whether class is already gathered before gathering, then sets :attr:`mpiroot` and :attr:`mpistate`."""
 
     @functools.wraps(func)
     def wrapper(self, *args, mpiroot=0, **kwargs):
@@ -171,6 +170,8 @@ def MPIGather(func):
 
 def MPIBroadcast(func):
 
+    """:meth:`mpi_broadcast` decorator that first gathers class on ``mpiroot``, sets :attr:`mpiroot`, :attr:`mpicomm` :attr:`mpistate`."""
+
     @functools.wraps(func)
     @classmethod
     @CurrentMPIComm.enable
@@ -184,7 +185,7 @@ def MPIBroadcast(func):
         new.mpicomm = mpicomm
         func(new,self,*args,**kwargs)
         new.mpistate = CurrentMPIState.BROADCAST
-        if isscattered: self.mpi_scatter()
+        #if isscattered: self.mpi_scatter()
         return new
 
     return wrapper
@@ -239,7 +240,7 @@ def split_ranks(N_ranks, N, include_all=False):
 
 class MPITaskManager(object):
     """
-    An MPI task manager that distributes tasks over a set of MPI processes,
+    A MPI task manager that distributes tasks over a set of MPI processes,
     using a specified number of independent workers to compute each task.
 
     Given the specified number of independent workers (which compute

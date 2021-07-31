@@ -5,7 +5,7 @@ from collections import UserDict
 
 import yaml
 
-from .libutils.syntax_description import yaml_parser, YamlLoader
+from .libutils.syntax_description import yaml_parser, YamlLoader, split_sections, join_sections, ParserError
 from . import section_names
 
 
@@ -66,26 +66,6 @@ class KeywordError(Exception):
         return 'Unknown keyword {}'.format(self.word)
 
 
-class ParserError(Exception):
-
-    pass
-
-
-def split_sections(word, sep=section_sep, default_section=None):
-    if isinstance(word,str):
-        toret = tuple(word.strip().split(sep))
-    elif isinstance(word,(list,tuple)):
-        toret = tuple(word)
-    else:
-        raise TypeError('Wrong type {} for sections {}'.format(type(word),word))
-    if len(toret) == 1 and default_section is not None:
-        toret = (default_section,) + toret
-    return toret
-
-
-def join_sections(words, sep=section_sep):
-    return section_sep.join(words)
-
 
 def expand_sections(di, sep=section_sep):
 
@@ -134,23 +114,6 @@ def collapse_sections(di, maxdepth=None, sep=section_sep):
     return toret
 
 
-def _search_in_dict(di, *keys):
-
-    if len(keys) == 0:
-        return di
-
-    def callback(data, key, *keys):
-        if len(keys) == 0:
-            return data[key]
-        return callback(data[key],*keys)
-
-    try:
-        toret = callback(di,*keys)
-    except KeyError as exc:
-        raise ParserError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
-    return toret
-
-
 class Decoder(UserDict):
 
     def __init__(self, data=None, string=None, base_dir=None, parser=None, decode=True):
@@ -184,7 +147,7 @@ class Decoder(UserDict):
 
 
     def search(self, *keys):
-        return _search_in_dict(self.data,*keys)
+        return search_in_dict(self.data,*keys)
 
 
     def decode(self):
@@ -216,7 +179,7 @@ class Decoder(UserDict):
         def callback(fulldi, keys=None, placeholder=None):
             keys = keys or []
             oldkeys = set()
-            di = _search_in_dict(fulldi,*keys)
+            di = search_in_dict(fulldi,*keys)
             isscalar = not isinstance(di,(dict,list))
             if isscalar: # di not necessarily dict, if e.g. global: value
                 di = [di]

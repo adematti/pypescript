@@ -207,15 +207,15 @@ class setup(object):
         Parameters
         ----------
         base_dir : string, default='.'
-            Root of the directory tree to explore. ``section_names.py`` is saved in this root directory.
+            Root of the directory tree to explore.
 
-        include_pype_module_names : list, default=None
-            List of module names (w.r.t. ``base_dir``) to install.
+        sections : string, list, default='.'
+            Section name *yaml* file, or list of sections (strings).
+
+        pype_module_names : string, default=None
+            Name of file containing a list of modules (w.r.t. ``base_dir``) to install.
+            See :func:`utils.read_path_list`.
             If not ``None``, all modules in ``base_dir`` are considered.
-
-        exclude_pype_module_names : list, default=None
-            List of module names (w.r.t. ``base_dir``) to exclude.
-            If ``None``, no module is excluded.
         """
         self.base_dir = base_dir
         self.section_dir = os.path.join('build','sections')

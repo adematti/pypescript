@@ -14,6 +14,7 @@ from . import mpi
 
 
 def exception_handler(exc_type, exc_value, exc_traceback):
+    """Print exception with a logger."""
     # Do not print traceback if the exception has been handled and logged
     _logger_name = 'Exception'
     log = logging.getLogger(_logger_name)
@@ -164,7 +165,11 @@ def snake_to_pascal_case(snake):
 
 
 def addclslogger(cls):
-
+    """
+    A class decorator that adds attributes for logging:
+    - logger
+    - methods log_debug, log_info, log_warning, log_error, log_critical
+    """
     cls.logger = logging.getLogger(cls.__name__)
 
     def _make_logger(level):
@@ -177,7 +182,7 @@ def addclslogger(cls):
 
         return logger
 
-    for level in ['debug','info','warning','error','critical','log']:
+    for level in ['debug','info','warning','error','critical']:
         setattr(cls,'log_{}'.format(level),_make_logger(level))
 
     return cls
@@ -280,6 +285,7 @@ class _BaseClass(object):
 
     @property
     def mpiattrs(self):
+        """MPI attributes"""
         return {'mpicomm':self.mpicomm,'mpistate':self.mpistate,'mpiroot':self.mpiroot}
 
     def is_mpi_root(self):
@@ -295,13 +301,13 @@ class _BaseClass(object):
         return self.mpistate == mpi.CurrentMPIState.BROADCAST
 
     def __copy__(self):
-        """Return shallow copy of ``self``."""
         new = self.__class__.__new__(self.__class__)
         new.__dict__.update(self.__dict__)
         if hasattr(self,'attrs'): new.attrs = self.attrs.copy()
         return new
 
     def copy(self):
+        """Return shallow copy of ``self``."""
         return self.__copy__()
 
     def __deepcopy__(self, memo):
@@ -323,7 +329,18 @@ class _BaseClass(object):
 class ScatteredBaseClass(_BaseClass):
     """
     Base template for **pypescript** MPI classes.
-    It defines a couple of base methods.
+    It defines a couple of base methods and attributes.
+
+    Attributes
+    ----------
+    mpistate : CurrentMPIState
+        See :class:`CurrentMPIState`.
+
+    mpicomm : MPI communicator
+        Current MPI communicator.
+
+    mpiroot : int
+        MPI root rank.
     """
 
     @mpi.MPIInit
@@ -341,7 +358,7 @@ class ScatteredBaseClass(_BaseClass):
     @classmethod
     @mpi.CurrentMPIComm.enable
     def from_state(cls, state, mpistate=mpi.CurrentMPIState.GATHERED, mpiroot=0, mpicomm=None):
-        """Instantiate and initalise class with state dictionary."""
+        """Instantiate and initalize class with state dictionary."""
         new = cls.__new__(cls)
         new.mpicomm = mpicomm
         new.mpistate = mpistate
@@ -350,6 +367,7 @@ class ScatteredBaseClass(_BaseClass):
         return new
 
     def mpi_to_state(self, mpistate):
+        """Return instance, changing current MPI state to ``mpistate``."""
         mpistate = mpi.CurrentMPIState(mpistate)
         if mpistate == mpi.CurrentMPIState.GATHERED:
             if self.is_mpi_scattered():
@@ -381,6 +399,7 @@ class ScatteredBaseClass(_BaseClass):
 
     @mpi.MPIBroadcast
     def mpi_broadcast(new, self=None, mpiroot=0, mpicomm=None):
+        """Broadcast class from ``mpiroot`` to all ranks."""
         new = mpicomm.bcast(self,mpiroot=mpiroot)
         new.mpicomm = mpicomm
         new.mpistate = mpi.CurrentMPIState.BROADCAST
@@ -513,7 +532,6 @@ class BaseClass(_BaseClass):
     Base template for **pypescript** MPI classes.
     It defines a couple of base methods.
     """
-
     @property
     def mpistate(self):
         return mpi.CurrentMPIState.BROADCAST
@@ -543,7 +561,7 @@ class BaseClass(_BaseClass):
     @classmethod
     @mpi.CurrentMPIComm.enable
     def from_state(cls, state, mpiroot=0, mpicomm=None):
-        """Instantiate and initalise class with state dictionary."""
+        """Instantiate and initalize class with state dictionary."""
         new = cls.__new__(cls)
         new.mpicomm = mpicomm
         new.mpiroot = mpiroot

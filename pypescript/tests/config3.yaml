@@ -6,7 +6,7 @@ hello:
   other: ${global$(1)}
 
 answer$(%):
-  is: another$(%)
+  is: [another$(%)]
   #is: $%
 
 another$(%):

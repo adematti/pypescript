@@ -1,4 +1,4 @@
-"""Definition of :class:`BaseModule` and :class:`BasePipeline`."""
+"""Definition of :class:`BaseModule`."""
 
 import os
 import sys
@@ -20,9 +20,36 @@ def _import_pygraphviz():
     return pgv
 
 
-def mimport(module_name, module_file=None, module_class=None, name=None, data_block=None, options={}):
+def mimport(module_name, module_file=None, module_class=None, name=None, data_block=None, options=None):
+    """
+    Convenient function to load *pypescript* module.
+
+    Parameters
+    ----------
+    module_name : string, default=None
+        *Python* module name.
+
+    module_file : string, default=None
+        Module file, used if ``module_name`` not provided.
+
+    module_class : string, default=None
+        Module class to load from *Python* module.
+        Unnessary if only one class in the module.
+
+    name : string, default=None
+        Local (i.e. bound to the pipeline) module name.
+
+    data_block : DataBlock, default=None
+        Structure containing data exchanged between modules. If ``None``, creates one.
+
+    options : SectionBlock, dict, default=None
+        Options for this module.
+    """
     if name is None:
-        name = module_name.split('.')[-1]
+        if module_name is not None:
+            name = module_name.split('.')[-1]
+        else:
+            name = os.path.splitext(module_file)[0].split(os.sep)[-1]
     options = options or {}
     options[syntax.module_name] = module_name
     options[syntax.module_file] = module_file
@@ -30,8 +57,9 @@ def mimport(module_name, module_file=None, module_class=None, name=None, data_bl
     return BaseModule.from_filename(name=name,data_block=data_block,options=options)
 
 
-#_all_loaded_modules = {}
 class MetaModule(type):
+
+    """Meta class to replace :meth:`setup`, :meth:`execute` and :meth:`cleanup` module methods."""
 
     def __new__(meta, name, bases, class_dict):
         cls = super().__new__(meta, name, bases, class_dict)
@@ -39,10 +67,18 @@ class MetaModule(type):
         return cls
 
     def set_functions(cls, functions):
-
         """
-        Extends builtin :meth:`__getattribute__` to complement exceptions occuring in :meth:`setup`,
-        :meth:`execute` and :meth:`cleanup` with module class and local name, for easy debugging.
+        Wrap input ``functions`` and add corresponding methods to class ``cls``.
+        Specifically:
+
+        - before ``functions`` calls, fills in :attr:`BaseModule.data_block` with values specified in :attr:`BaseModule._datablock_set`
+        - after ``functions`` calls, duplicate entries of :attr:`BaseModule.data_block` with key pairs specified in :attr:`BaseModule._datablock_duplicate`
+        - exceptions occuring in ``functions`` calls are complemented with module class and local name, for easy debugging
+
+        Parameters
+        ----------
+        functions : dict
+            Dictionary of function name: callable.
         """
         def make_wrapper(name, fun):
             def wrapper(self):
@@ -81,6 +117,9 @@ class BaseModule(object,metaclass=MetaModule):
 
     data_block : DataBlock
         Structure containing data exchanged between modules.
+
+    description : ModuleDescription
+        Module description.
     """
     logger = logging.getLogger('BaseModule')
     _available_options = [syntax.module_base_dir,syntax.module_name,syntax.module_file,syntax.module_class,
@@ -105,11 +144,11 @@ class BaseModule(object,metaclass=MetaModule):
         data_block : DataBlock, default=None
             Structure containing data exchanged between modules. If ``None``, creates one.
 
-        description : dict, default=None
-            Dictionary containing module description.
+        description : string, ModuleDescription, dict, default=None
+            Module description.
         """
         self.name = name
-        self.description = description
+        self.description = ModuleDescription(description)
         self.log_info('Init module {}.'.format(self),rank=0)
         self.set_config_block(options=options,config_block=config_block)
         self.set_data_block(data_block=data_block)
@@ -119,6 +158,11 @@ class BaseModule(object,metaclass=MetaModule):
     def set_config_block(self, options=None, config_block=None):
         """
         Set :attr:`config_block` and :attr:`options`.
+        Also sets:
+        
+        - :attr:`_datablock_set`, dictionary of (key, value) to set into :attr:`data_block`
+        - :attr:`_datablock_mapping`, :class:`BlockMapping` instance that maps :attr:`data_block` entries to others
+        - :attr:'_datablock_duplicate', :class:`BlockMapping` instance used to duplicate :attr:`data_block` entries
 
         Parameters
         ----------
@@ -182,6 +226,7 @@ class BaseModule(object,metaclass=MetaModule):
 
     @property
     def mpicomm(self):
+        """Return current MPI communicator."""
         return self.data_block[section_names.mpi,'comm']
 
     def setup(self):
@@ -200,9 +245,9 @@ class BaseModule(object,metaclass=MetaModule):
         """String as module class name + module local name (in this pipeline)."""
         return '{} [{}]'.format(self.__class__.__name__,self.name)
 
-    def fetch_module(self, path=''):
-        """Fetch module/pipeline given (dot-separated) path."""
-        names = path.split('.')
+    def fetch_module(self, name=''):
+        """Fetch module/pipeline given (dot-separated) name."""
+        names = name.split('.')
         module = self
         if names[0] == syntax.main: # start from root
             while module._pipeline is not None:

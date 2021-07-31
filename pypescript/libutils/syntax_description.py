@@ -16,7 +16,27 @@ section_sep = '.'
 
 others = '$others'
 
+
 def split_sections(word, sep=section_sep, default_section=None):
+    """
+    Split ``word`` into a tuple of different sections.
+
+    Parameters
+    ----------
+    word : string
+        String to be split into different sections.
+
+    sep : string, default='.'
+        Separator.
+
+    default_section : string, default=None
+        If not ``None``, and number of sections found is less than 2, add ``default_section`` at the binning.
+
+    Returns
+    -------
+    sections : tuple
+        Tuple of sections.
+    """
     if isinstance(word,str):
         toret = tuple(word.strip().split(sep))
     elif isinstance(word,(list,tuple)):
@@ -29,12 +49,35 @@ def split_sections(word, sep=section_sep, default_section=None):
 
 
 def join_sections(words, sep=section_sep):
+    """Join sections with separator ``sep``."""
     return section_sep.join(words)
 
 
-class YamlLoader(yaml.SafeLoader):
+def search_in_dict(di, *keys):
 
-    pass
+    if len(keys) == 0:
+        return di
+
+    def callback(data, key, *keys):
+        if len(keys) == 0:
+            return data[key]
+        return callback(data[key],*keys)
+
+    try:
+        toret = callback(di,*keys)
+    except KeyError as exc:
+        raise KeyError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
+    return toret
+
+
+class YamlLoader(yaml.SafeLoader):
+    """
+    YamlLoader that correctly parses numbers.
+
+    Reference
+    ---------
+    https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
+    """
 
 YamlLoader.add_implicit_resolver(u'tag:yaml.org,2002:float',
                             re.compile(u'''^(?:
@@ -73,16 +116,52 @@ def yaml_parser(string, index=None):
 
 class ParserError(Exception):
 
-    pass
+    """Exception raised when template form parsing fails."""
 
 
 class Decoder(UserDict):
+    """
+    Class that decodes description dictionary, taking care of template forms.
 
-    def __init__(self, data=None, string=None, parser=None, filename=None, decode=True, decode_eval=True, **kwargs):
+    Attributes
+    ----------
+    data : dict
+        Description dictionary.
 
+    filename : string
+        Path to corresponding description file.
+
+    parser : callable
+        *yaml* parser.
+    """
+    def __init__(self, data=None, string=None, parser=yaml_parser, filename=None, decode=True, decode_eval=True, **kwargs):
+        """
+        Instantiate :class:`Decoder`.
+
+        Parameters
+        ----------
+        data : dict, string, default=None
+            Dictionary or path to a description *yaml* file to decode.
+
+        string : string
+            *yaml* format string to decode. Added on top of ``data``.
+
+        parser : callable, default=yaml_parser
+            Function that parses *yaml* string into a dictionary.
+
+        filename : string, default=None
+            Path to description file. Not used if ``data`` is string.
+
+        decode : bool, default=True
+            Whether to decode description dictionary, i.e. solving template forms.
+
+        decode_eval : bool, default=True
+            Whether to decode ``eval`` template forms.
+
+        kwargs : dict
+            Arguments for :func:`parser`.
+        """
         self.parser = parser
-        if parser is None:
-            self.parser = yaml_parser
 
         data_ = {}
 
@@ -101,32 +180,30 @@ class Decoder(UserDict):
         self._cache = {}
         if decode: self.decode(decode_eval=decode_eval)
 
-
     def read_file(self, filename):
+        """Read file at path ``filename``."""
         with open(filename,'r') as file:
             toret = file.read()
         return toret
 
-
     def search(self, *keys):
-
-        if len(keys) == 0:
-            return self.data
-
-        def callback(data, key, *keys):
-            if len(keys) == 0:
-                return data[key]
-            return callback(data[key],*keys)
-
-        try:
-            toret = callback(self.data,*keys)
-        except KeyError as exc:
-            raise ParserError('Required key "{}" does not exist'.format(section_sep.join(keys))) from exc
-        return toret
-
+        """Search value corresponding to the input sequence of keys."""
+        return search_in_dict(self.data,*keys)
 
     def decode(self, decode_eval=True):
+        """
+        Decode description dictionary:
+        - expand ``section.name: value`` entries into ``{'section': {'name': 'value'}}`` dictionary
+        - replace ``${filename:index/name:section.name}`` by corresponding value in description file at ``filename``,
+          ``index/name`` description (can be several in a file), at ``section`` , ``name`` keys.
+         - replace ``f'here is the value: ${filename:index/name:section.name}'`` templates by ``'here is the value: value'``
+         - replace ``e'42 + ${filename:index/name:section.name}' forms by ``42 + value``.
 
+        Parameters
+        ----------
+        decode_eval : bool, default=True
+            Whether to decode ``eval`` template forms.
+        """
         # first expand the dictionary .
         def callback(di):
 
@@ -208,6 +285,11 @@ class Decoder(UserDict):
         self.data = callback(self.data)
 
     def decode_replace(self, word):
+        """
+        If ``word`` matches template ``${filename:index/name:section.name}``, return corresponding value in description file at ``filename``,
+          ``index/name`` description (can be several in a file), at ``section`` , ``name`` keys.
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.match(replace_re_pattern,word)
             if m:
@@ -247,7 +329,10 @@ class Decoder(UserDict):
                 return toret
 
     def decode_eval(self, word):
-
+        """
+        If ``word`` matches template ``e'42 + ${filename:index/name:section.name}', return ``42 + value``
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.search(eval_re_pattern,word)
             import numpy as np
@@ -265,7 +350,10 @@ class Decoder(UserDict):
                 return eval(words,dglobals,{})
 
     def decode_format(self, word):
-
+        """
+        If ``word`` matches template ``f'here is the value: ${filename:index/name:section.name}'``, return ``'here is the value: value'``
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.search(format_re_pattern,word)
             import numpy as np
