@@ -16,8 +16,11 @@ from .config import ConfigBlock, ConfigError
 class ModuleTodo(object):
 
     """Helper class to run module :meth:`BaseModule.setup`, :meth:`BaseModule.execute` and :meth:`BaseModule.cleanup`."""
+    _decision_tree = {'setup':{'setup':['cleanup','setup'],'execute':['cleanup','setup'],'cleanup':['setup']},
+                      'execute':{'setup':['execute'],'execute':['execute'],'cleanup':['setup','execute']},
+                      'cleanup':{'setup':['cleanup'],'execute':['cleanup'],'cleanup':[]}}
 
-    def __init__(self, pipeline, module, funcnames=None):
+    def __init__(self, pipeline, module, step):
         """
         Instantiate :class:`ModuleTodo`.
 
@@ -29,32 +32,31 @@ class ModuleTodo(object):
         module : BaseModule
             Module to run.
 
-        funcnames : string, list, default=None
-            List of ``module`` methods to call.
+        step : string
+            ``module`` method to call.
         """
         self.pipeline = pipeline
         self.module = module
-        if isinstance(funcnames,str):
-            funcnames = [funcnames]
-        self.funcnames = funcnames or []
-        self.func = [getattr(module,funcname) for funcname in self.funcnames]
+        self.step = step
 
     def __repr__(self):
-        return 'ModuleTodo(pipeline=[{}],module=[{}],funcnames={})'.format(self.pipeline.name,self.module.name,self.funcnames)
+        return 'ModuleTodo(pipeline=[{}],module=[{}],steps={})'.format(self.pipeline.name,self.module.name,self.todo())
 
     def set_data_block(self):
         """Set module :attr:`BaseModule.data_block` to :attr:`BasePipeline.pipe_block`."""
         self.module.set_data_block(self.pipeline.pipe_block)
 
-    def compute(self):
-        """Call module methods."""
-        for func in self.func:
-            func()
+    def todo(self):
+        """Return list of steps to run."""
+        return self._decision_tree[self.step][self.module._state]
 
     def __call__(self):
         """Run module: set :attr:`BaseModule.data_block` and call module methods."""
-        self.set_data_block()
-        self.compute()
+        todo = self.todo()
+        if todo:
+            self.set_data_block()
+            for step in todo:
+                getattr(self.module,step)()
 
 
 class MetaPipeline(MetaModule):
@@ -69,6 +71,7 @@ class MetaPipeline(MetaModule):
         - before ``functions`` calls, fills in :attr:`BasePipeline.data_block` with values specified in :attr:`BasePipeline._datablock_set`
         - after ``functions`` calls, copy entries of :attr:`BasePipeline.pipe_block` into :attr:`BasePipeline.data_block`
           with key pairs specified in :attr:`BasePipeline._datablock_duplicate`
+        - set pipeline :attr:`BasePipeline._state`
         - exceptions occuring in ``functions`` calls are complemented with module class and local name, for easy debugging
 
         Parameters
@@ -76,7 +79,8 @@ class MetaPipeline(MetaModule):
         functions : dict
             Dictionary of function name: callable.
         """
-        def make_wrapper(name, fun):
+        def make_wrapper(step, fun):
+
             def wrapper(self):
                 for key,value in self._datablock_set.items():
                     self.data_block[key] = value
@@ -84,7 +88,7 @@ class MetaPipeline(MetaModule):
                 try:
                     fun(self)
                 except Exception as exc:
-                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
+                    raise RuntimeError('Exception in function {} of {} [{}].'.format(step,self.__class__.__name__,self.name)) from exc
 
                 for keyg,keyl in self._datablock_duplicate.items():
                     if keyl in self.data_block:
@@ -93,6 +97,8 @@ class MetaPipeline(MetaModule):
                     elif keyl in self.pipe_block: # because not necessarily present at each step...
                         #print('pb',self.name,keyg,keyl,id(self.pipe_block[keyl]))
                         self.data_block[keyg] = self.pipe_block[keyl]
+
+                self._state = step
 
             return wrapper
 
@@ -172,7 +178,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         :attr:`config_block` is updated by that of all :attr:`modules`, then the resulting
         block is set in all :attr:`modules`.
         Also sets:
-        
+
         - :attr:`_datablock_set`, dictionary of (key, value) to set into :attr:`data_block`
         - :attr:`_datablock_mapping`, :class:`BlockMapping` instance that maps :attr:`data_block` entries to others
         - :attr:'_datablock_duplicate', :class:`BlockMapping` instance used to duplicate :attr:`data_block` entries
@@ -216,13 +222,10 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         setup_todos = setup_todos or []
         execute_todos = execute_todos or []
         cleanup_todos = cleanup_todos or []
-        modules_todo = {}
-        modules_last_setup = {}
-        self.setup_todos = []
-        self.execute_todos = []
-        self.cleanup_todos = []
+        modules_todo = []
 
         for step,todos in zip([syntax.setup_function,syntax.execute_function,syntax.cleanup_function],[setup_todos,execute_todos,cleanup_todos]):
+            setattr(self,'{}_todos'.format(step),[])
             for itodo,module_todo in enumerate(todos):
                 split = syntax.split_sections(module_todo)
                 if len(split) == 1:
@@ -237,38 +240,16 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
                         module = self.get_module_from_name(module)
                         self.modules.append(module)
                 if module.name not in modules_todo:
-                    modules_todo[module.name] = []
-                last_step = modules_todo[module.name][-1] if modules_todo[module.name] else syntax.cleanup_function
-                funcnames = []
-                if todo == syntax.setup_function:
-                    if last_step != syntax.cleanup_function: funcnames.append(syntax.cleanup_function)
-                    funcnames.append(todo)
-                elif todo == syntax.execute_function:
-                    if last_step not in [syntax.setup_function,syntax.execute_function]: funcnames.append(syntax.setup_function)
-                    funcnames.append(todo)
-                elif todo == syntax.cleanup_function:
-                    if last_step not in [syntax.setup_function,syntax.execute_function]: funcnames.append(syntax.setup_function)
-                    funcnames.append(todo)
-                modules_todo[module.name] += funcnames
-                if syntax.setup_function in funcnames:
-                    modules_last_setup[module.name] = step
+                    modules_todo.append(module.name)
                 self_todos = getattr(self,'{}_todos'.format(step))
-                self_todos.append(ModuleTodo(self,module,funcnames=funcnames))
-        module_names = [module.name for module in self.modules]
+                self_todos.append(ModuleTodo(self,module,step=todo))
 
-        for module_name,todo in modules_todo.items():
-            if todo[-1] != syntax.cleanup_function:
-                module = self.modules[module_names.index(module_name)]
-                module_todo = ModuleTodo(self,module,funcnames=syntax.cleanup_function)
-                if modules_last_setup[module_name] == syntax.execute_function:
-                    self.execute_todos.append(module_todo)
-                else:
-                    self.cleanup_todos.append(module_todo)
         for module in self.modules:
             if module.name not in modules_todo:
-                self.setup_todos.append(ModuleTodo(self,module,funcnames=syntax.setup_function))
-                self.execute_todos.append(ModuleTodo(self,module,funcnames=syntax.execute_function))
-                self.cleanup_todos.append(ModuleTodo(self,module,funcnames=syntax.cleanup_function))
+                self.setup_todos.append(ModuleTodo(self,module,step=syntax.setup_function))
+                self.execute_todos.append(ModuleTodo(self,module,step=syntax.execute_function))
+            self.cleanup_todos.append(ModuleTodo(self,module,step=syntax.cleanup_function)) # just to make sure cleanup is run
+        module_names = [module.name for module in self.modules]
         self.modules = dict(zip(module_names,self.modules))
 
     def get_modules(self, modules):
@@ -538,10 +519,9 @@ class BatchPipeline(MPIPipeline):
     def __init__(self, *args, **kwargs):
         super(BatchPipeline,self).__init__(*args,**kwargs)
         setup_modules = [todo.module for todo in self.setup_todos]
-        cleanup_modules = [todo.module for todo in self.cleanup_todos]
         for todo in self.execute_todos:
-            if todo.module in setup_modules or todo.module in cleanup_modules:
-                raise ConfigError('{} requires module [{}] to run entirely (setup, execute, cleanup) in the pipeline execute step.'.format(self.__class__.__name__,todo.module.name))
+            if todo.module in setup_modules:
+                raise ConfigError('{} requires module [{}] to run entirely (setup, execute) in the pipeline execute step.'.format(self.__class__.__name__,todo.module.name))
 
     def setup(self):
         """Set up :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
@@ -624,7 +604,7 @@ class BatchPipeline(MPIPipeline):
         """Execute subpipeline for each task, either using the command line, or by executing a job script (if ``job_template`` is provided)."""
         self.iconfig_block = self.config_block.copy()
         options = {}
-        options[syntax.execute] = [syntax.join_sections((todo.module.name,funcname)) for todo in self.execute_todos for funcname in todo.funcnames]
+        options[syntax.execute] = [syntax.join_sections((todo.module.name,todo.step)) for todo in self.execute_todos]
         options[syntax.datablock_set] = {syntax.join_sections(key):value for key,value in self._datablock_set.items()}
         duplicate = {}
         for key in set(self._datablock_duplicate) | set(self._datablock_key_iter) - set(self._datablock_bcast):

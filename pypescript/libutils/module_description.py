@@ -37,7 +37,7 @@ class ModuleDescription(UserDict):
             Arguments for :class:`syntax_description.Decoder`.
         """
         if isinstance(data,ModuleDescription):
-            self.__dict__.update(data)
+            self.__dict__.update(data.__dict__)
             return
 
         decoder = Decoder(data=data,string=string,parser=parser,**kwargs)

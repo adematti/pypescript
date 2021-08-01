@@ -5,7 +5,7 @@ from collections import UserDict
 
 import yaml
 
-from .libutils.syntax_description import yaml_parser, YamlLoader, split_sections, join_sections, ParserError
+from .libutils.syntax_description import yaml_parser, YamlLoader, split_sections, join_sections, search_in_dict, ParserError
 from . import section_names
 
 
@@ -20,7 +20,6 @@ datablock_mapping_re_pattern = re.compile('\$\&\[(.*?)\]')
 eval_re_pattern = re.compile("e'(.*?)'$")
 format_re_pattern = re.compile("f'(.*?)'$")
 
-
 section_sep = '.'
 block_save_extension = '.npy'
 main = 'main'
@@ -34,30 +33,16 @@ _keyword_names = ['module_base_dir','module_name','module_file','module_class',\
 'modules','setup','execute','cleanup',\
 'iter','nprocs_per_task','configblock_iter','datablock_iter','datablock_key_iter',\
 'mpiexec','hpc_job_dir','hpc_job_submit','hpc_job_template','hpc_job_options']
-_keyword_cls = []
-keywords = {}
+_keywords = {}
 
-
+# add keywords to local dictionary
 for keyword in _keyword_names:
-
-    #def __str__(self):
-    #    return self.__class__.__name__
-
-    #locals()[keyword] = keywords[keyword] = type(keyword,(object,),{'__str__': __str__,'keyword':'${}'.format(keyword)})()
-    locals()[keyword] = keywords[keyword] = '${}'.format(keyword)
-    _keyword_cls.append(keywords[keyword])
-
-
-def remove_keywords(di, other=None):
-    toret = {}
-    if other is None: other = []
-    for key,value in di.items():
-        if key not in _keyword_cls and key not in other:
-            toret[key] = value
-    return toret
+    locals()[keyword] = _keywords[keyword] = '${}'.format(keyword)
 
 
 class KeywordError(Exception):
+
+    """Exception raised when issue with **pypescript** keyword."""
 
     def __init__(self, word):
         self.word = word
@@ -68,7 +53,12 @@ class KeywordError(Exception):
 
 
 def expand_sections(di, sep=section_sep):
+    """
+    Recursively replace ``section_sep`` separated ``di`` keys by nested dictionary.
 
+    >>> expand_sections({'section1.section2':'value'},sep='.')
+    {'section1': {'section2': 'value'}}
+    """
     toret = {}
     for key,value in di.items():
         if sep is not None:
@@ -91,7 +81,12 @@ def expand_sections(di, sep=section_sep):
 
 
 def collapse_sections(di, maxdepth=None, sep=section_sep):
+    """
+    Collapse nested dictionaries up to ``maxdepth``.
 
+    >>> collapse_sections({'section1': {'section2': {'section3': 'value'}}},maxdepth=2,sep='.')
+    {'section1.section2': {'section3': 'value'}}
+    """
     def callback(di, maxdepth):
         toret = {}
         for key,value in di.items():
@@ -115,9 +110,44 @@ def collapse_sections(di, maxdepth=None, sep=section_sep):
 
 
 class Decoder(UserDict):
+    """
+    Class that decodes configuration dictionary, taking care of template forms.
 
-    def __init__(self, data=None, string=None, base_dir=None, parser=None, decode=True):
+    Attributes
+    ----------
+    data : dict
+        Decoded configuration dictionary.
 
+    raw : dict
+        Raw (without decoding of template forms) configuration dictionary.
+
+    filename : string
+        Path to corresponding configuration file.
+
+    parser : callable
+        *yaml* parser.
+    """
+    def __init__(self, data=None, string=None, parser=None, decode=True, **kwargs):
+        """
+        Initialize :class:`Decoder`.
+
+        Parameters
+        ----------
+        data : dict, string, default=None
+            Dictionary or path to a configuration *yaml* file to decode.
+
+        string : string
+            *yaml* format string to decode. Added on top of ``data``.
+
+        parser : callable, default=yaml_parser
+            Function that parses *yaml* string into a dictionary.
+
+        decode : bool, default=True
+            Whether to decode configuration dictionary, i.e. solving template forms.
+
+        kwargs : dict
+            Arguments for :func:`parser`.
+        """
         self.parser = parser
         if parser is None:
             self.parser = yaml_parser
@@ -133,26 +163,39 @@ class Decoder(UserDict):
             data_ = dict(data)
 
         if string is not None:
-            data_.update(self.parser(string))
+            data_.update(self.parser(string,**kwargs))
 
         self.data = self.raw = data_
         self._cache = {}
         if decode: self.decode()
 
-
     def read_file(self, filename):
+        """Read file at path ``filename``."""
         with open(filename,'r') as file:
             toret = file.read()
         return toret
 
-
     def search(self, *keys):
+        """Search value corresponding to the input sequence of keys."""
         return search_in_dict(self.data,*keys)
 
-
     def decode(self):
+        """
+        Decode description dictionary :attr:`data`:
 
-        # first expand the dictionary .
+        - expand ``section.name: value`` entries into ``{'section': {'name': 'value'}}`` dictionary
+        - generate repeats $(%)
+        - replace ``${filename:section.name}`` by corresponding value in configuration file at path ``filename``,
+          at ``section`` , ``name`` keys.
+        - replace ``f'here is the value: ${filename:section.name}'`` templates by ``'here is the value: value'``
+        - replace ``e'42 + ${filename:section.name}' forms by ``42 + value``
+        - decode :class:`DataBlock` duplicate: $[section1.name1] = $[section2.name2]
+        - decode :class:`DataBlock` mapping: $[section1.name1] = &$[section2.name2]
+        - decode :class:`DataBlock` set: $[section1.name1] = value
+        - decode **pypescript** keywords (starting with '$')
+        - decode :class:`ConfigBlock` mapping: &${section.name}
+        """
+        # first expand the dictionary
         def callback(di):
 
             toret = {}
@@ -206,9 +249,11 @@ class Decoder(UserDict):
             return oldkeys
 
         oldkeys = callback(self.data)
+        # remove keys containing $(%)
         for key in oldkeys:
             del self.data[key]
 
+        # replace ${}
         def callback(di):
             toret = {}
             for key,value in di.items():
@@ -229,6 +274,7 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        # interpret f'', e''
         def callback(di):
             toret = di.copy()
             items = list(di.items()) if isinstance(di,dict) else list(enumerate(di))
@@ -249,6 +295,9 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        # decode :class:`DataBlock` duplicate: $[section1.name1] = $[section2.name2]
+        # decode :class:`DataBlock` mapping: $[section1.name1] = &$[section2.name2]
+        # decode :class:`DataBlock` set: $[section1.name1] = value
         def callback(di):
             toret = {}
             _duplicate, _mapping, _set = {}, {}, {}
@@ -295,7 +344,7 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
-        # decode config_block mapping
+        # decode :class:`ConfigBlock` mapping: &${section.name}
         def callback(di):
             toret = {}
             for key,value in list(di.items()):
@@ -312,33 +361,46 @@ class Decoder(UserDict):
 
         self.mapping = callback(self.data)
 
-
     def decode_keyword(self, word):
+        """
+        If ``word`` matches template ``$keyword``, with ``keyword`` **pypescript** keyword, return ``keyword``.
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.match(keyword_re_pattern,word)
             if m:
                 word = m.group(1)
                 try:
-                    return keywords[word]
+                    return _keywords[word]
                 except KeyError:
                     raise KeywordError(word)
 
     def decode_repeat(self, word, placeholder=None):
+        """
+        If ``word`` matches template ``start$(value)end``:
+
+        - if ``value`` is ``%``, ``placeholder`` is not ``None``: replace by ``$(placeholder)``
+        - else, try to find ``start$(%)end`` in data, return new word, new key in data (``startvalueend``), old key in data (``start$(%)end``) and ``value``
+
+        Else, if ``placeholder`` is not ``None``, replace ``$%`` by ``placeholder``.
+        """
         if isinstance(word,str):
             m = re.match(repeat_re_pattern,word)
             if m:
                 value = m.group(1)
                 if value == '%':
-                    if placeholder is None:
+                    if placeholder is None: # nothing to do
                         return
                     return self.decode_repeat(word.replace('$(%)','$({})'.format(placeholder)),placeholder=None)
                 newword = word.replace('$({})'.format(value),value)
                 newkey = newword
-                if re.match(replace_re_pattern,newword):
+                if re.match(replace_re_pattern,newword): # $(value) is in replace pattern ${}: replace by value
                     word = re.match(replace_re_pattern,word).group(1)
                     newkey = word.replace('$({})'.format(value),value)
-                if newkey in self.data: # nothing else to do
+                # startvalueend already in data: nothing to do
+                if newkey in self.data:
                     return newword
+                # else try to find matching start$(%)end in data
                 key_pattern = word.replace('$({})'.format(value),'$(%)')
                 for key in self.data:
                     if key == key_pattern:
@@ -347,6 +409,11 @@ class Decoder(UserDict):
                 return word.replace('$%',placeholder)
 
     def decode_replace(self, word):
+        """
+        If ``word`` matches template ``${filename:section.name}``, return corresponding value in configuration file at path ``filename``,
+        at ``section`` , ``name`` keys.
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.match(replace_re_pattern,word)
             if m:
@@ -372,13 +439,20 @@ class Decoder(UserDict):
                 return toret
 
     def decode_mapping(self, word):
+        """
+        If ``word`` matches template ``&${section.name}``, return tuple ``(section, name)``.
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.match(mapping_re_pattern,word)
             if m:
                 return split_sections(m.group(1))
 
     def decode_eval(self, word):
-
+        """
+        If ``word`` matches template ``e'42 + ${filename:section.name}', return ``42 + value``
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.search(eval_re_pattern,word)
             import numpy as np
@@ -396,7 +470,10 @@ class Decoder(UserDict):
                 return eval(words,dglobals,{})
 
     def decode_format(self, word):
-
+        """
+        If ``word`` matches template ``f'here is the value: ${filename:section.name}'``, return ``'here is the value: value'``
+        Else return ``None``.
+        """
         if isinstance(word,str):
             m = re.search(format_re_pattern,word)
             import numpy as np

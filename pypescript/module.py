@@ -73,6 +73,7 @@ class MetaModule(type):
 
         - before ``functions`` calls, fills in :attr:`BaseModule.data_block` with values specified in :attr:`BaseModule._datablock_set`
         - after ``functions`` calls, duplicate entries of :attr:`BaseModule.data_block` with key pairs specified in :attr:`BaseModule._datablock_duplicate`
+        - set module :attr:`BaseModule._state`
         - exceptions occuring in ``functions`` calls are complemented with module class and local name, for easy debugging
 
         Parameters
@@ -80,7 +81,8 @@ class MetaModule(type):
         functions : dict
             Dictionary of function name: callable.
         """
-        def make_wrapper(name, fun):
+        def make_wrapper(step, fun):
+
             def wrapper(self):
                 for key,value in self._datablock_set.items():
                     self.data_block[key] = value
@@ -88,15 +90,18 @@ class MetaModule(type):
                 try:
                     fun(self)
                 except Exception as exc:
-                    raise RuntimeError('Exception in function {} of {} [{}].'.format(name,self.__class__.__name__,self.name)) from exc
+                    raise RuntimeError('Exception in function {} of {} [{}].'.format(step,self.__class__.__name__,self.name)) from exc
 
                 for keyg,keyl in self._datablock_duplicate.items():
                     if keyl in self.data_block:
                         self.data_block[keyg] = self.data_block[keyl]
+
+                self._state = step
+
             return wrapper
 
         for step,fun in functions.items():
-            setattr(cls,step,make_wrapper(step, fun))
+            setattr(cls,step,make_wrapper(step,fun))
 
 
 @utils.addclslogger
@@ -154,12 +159,13 @@ class BaseModule(object,metaclass=MetaModule):
         self.set_data_block(data_block=data_block)
         self._cache = {}
         self._pipeline = None
+        self._state = syntax.cleanup_function # start with cleanup, (nothing allocated)
 
     def set_config_block(self, options=None, config_block=None):
         """
         Set :attr:`config_block` and :attr:`options`.
         Also sets:
-        
+
         - :attr:`_datablock_set`, dictionary of (key, value) to set into :attr:`data_block`
         - :attr:`_datablock_mapping`, :class:`BlockMapping` instance that maps :attr:`data_block` entries to others
         - :attr:'_datablock_duplicate', :class:`BlockMapping` instance used to duplicate :attr:`data_block` entries
@@ -333,20 +339,24 @@ class BaseModule(object,metaclass=MetaModule):
         def get_func_name(step):
             return options.get('{}_function'.format(step),step)
 
+        # first look at the classes defined in the module
         import inspect
         all_cls = inspect.getmembers(module,inspect.isclass)
         # to select classes that are indeed defined (not imported) in the provided module
         all_name_cls = [c[0] for c in all_cls if c[1].__module__ == module.__name__]
 
+        # if not class specified in options
         if module_class is None:
+            # if description file provided, set class name to "name" value
             if description and not multiple_descriptions:
                 name_cls = description['name']
             else:
+                # if only one class defined in module
                 if len(all_name_cls) == 1:
                     name_cls = all_name_cls[0]
-                else:
+                else: # defining class name as Pascal case of module name
                     name_cls = utils.snake_to_pascal_case(base_module_name)
-            if all(hasattr(module,get_func_name(step)) for step in steps):
+            if all(hasattr(module,get_func_name(step)) for step in steps): # all functions given in module: create on-the-fly class
                 if description and multiple_descriptions:
                     raise ImportError('Description file {} describes multiple modules while there is only one in {}'.format(description_file,base_module_name))
                 new_cls = MetaModule(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
@@ -365,14 +375,15 @@ class BaseModule(object,metaclass=MetaModule):
                 #_all_loaded_modules[name] = toret
                 #return toret
             else:
-                cls.log_info('No {} functions found in module [{}], trying to load class {}.'.format(steps,name,name_cls),rank=0)
+                cls.log_debug('No {} functions found in module [{}], trying to load class {}.'.format(steps,name,name_cls),rank=0)
                 module_class = name_cls
 
+        # try to load class
         if module_class is not None:
             mod_cls = getattr(module,module_class,None)
             if mod_cls is None:
                 raise ValueError('Class {} does not exist in {} [{}]'.format(module_class,base_module_name,name))
-            if multiple_descriptions:
+            if multiple_descriptions: # get the corresponding description by name
                 found = False
                 for desc in description:
                     if desc['name'] == module_class:
@@ -383,9 +394,9 @@ class BaseModule(object,metaclass=MetaModule):
                     cls.log_info('No description found for {} in description file {}.'.format(module_class,description_file),rank=0)
                     description = None
             mod_cls = getattr(module,module_class)
-            if issubclass(mod_cls,cls):
+            if issubclass(mod_cls,cls): # if subclass of cls, do not create new class
                 toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
-            else:
+            else: # create BaseModule subclass
                 new_cls = MetaModule(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
                 new_cls.set_functions({step:getattr(mod_cls,get_func_name(step)) for step in steps})
                 toret = new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)

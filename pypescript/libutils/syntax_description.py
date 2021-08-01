@@ -54,7 +54,7 @@ def join_sections(words, sep=section_sep):
 
 
 def search_in_dict(di, *keys):
-
+    """Return value corresponding to sequence of ``keys`` entries in nested dictionary ``di``."""
     if len(keys) == 0:
         return di
 
@@ -72,11 +72,8 @@ def search_in_dict(di, *keys):
 
 class YamlLoader(yaml.SafeLoader):
     """
-    YamlLoader that correctly parses numbers.
-
-    Reference
-    ---------
-    https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
+    *yaml* loader that correctly parses numbers.
+    Taken from https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number.
     """
 
 YamlLoader.add_implicit_resolver(u'tag:yaml.org,2002:float',
@@ -98,7 +95,7 @@ YamlLoader.add_constructor('!none',none_constructor)
 
 
 def yaml_parser(string, index=None):
-    """Parse string in the *yaml* format."""
+    """Parse string in *yaml* format."""
     # https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
     alls = list(yaml.load_all(string,Loader=YamlLoader))
     if index is not None:
@@ -136,7 +133,7 @@ class Decoder(UserDict):
     """
     def __init__(self, data=None, string=None, parser=yaml_parser, filename=None, decode=True, decode_eval=True, **kwargs):
         """
-        Instantiate :class:`Decoder`.
+        Initialize :class:`Decoder`.
 
         Parameters
         ----------
@@ -192,12 +189,13 @@ class Decoder(UserDict):
 
     def decode(self, decode_eval=True):
         """
-        Decode description dictionary:
+        Decode description dictionary :attr:`data`:
+
         - expand ``section.name: value`` entries into ``{'section': {'name': 'value'}}`` dictionary
-        - replace ``${filename:index/name:section.name}`` by corresponding value in description file at ``filename``,
+        - replace ``${filename:index/name:section.name}`` by corresponding value in description file at path ``filename``,
           ``index/name`` description (can be several in a file), at ``section`` , ``name`` keys.
-         - replace ``f'here is the value: ${filename:index/name:section.name}'`` templates by ``'here is the value: value'``
-         - replace ``e'42 + ${filename:index/name:section.name}' forms by ``42 + value``.
+        - replace ``f'here is the value: ${filename:index/name:section.name}'`` templates by ``'here is the value: value'``
+        - replace ``e'42 + ${filename:index/name:section.name}' forms by ``42 + value``.
 
         Parameters
         ----------
@@ -227,6 +225,7 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        # replace ${}
         def callback(di):
             toret = {}
             for key,value in di.items():
@@ -247,6 +246,7 @@ class Decoder(UserDict):
 
         self.data = callback(self.data)
 
+        # interpret f'', e''
         def callback(di):
             if isinstance(di,list):
                 toret = []
@@ -286,8 +286,8 @@ class Decoder(UserDict):
 
     def decode_replace(self, word):
         """
-        If ``word`` matches template ``${filename:index/name:section.name}``, return corresponding value in description file at ``filename``,
-          ``index/name`` description (can be several in a file), at ``section`` , ``name`` keys.
+        If ``word`` matches template ``${filename:index/name:section.name}``, return corresponding value in description file at path ``filename``,
+        ``index/name`` description (can be several in a file), at ``section`` , ``name`` keys.
         Else return ``None``.
         """
         if isinstance(word,str):

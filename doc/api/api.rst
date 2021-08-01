@@ -31,6 +31,18 @@ pipeline module
   :members:
   :show-inheritance:
 
+syntax module
+-------------
+.. automodule:: pypescript.syntax
+  :members:
+  :show-inheritance:
+
+MPI module
+----------
+.. automodule:: pypescript.mpi
+  :members:
+  :show-inheritance:
+
 utils module
 ------------
 .. automodule:: pypescript.utils
@@ -48,6 +60,10 @@ libutils package
   :show-inheritance:
 
 .. automodule:: pypescript.libutils.module_description
+  :members:
+  :show-inheritance:
+
+.. automodule:: pypescript.libutils.syntax_description
   :members:
   :show-inheritance:
 
