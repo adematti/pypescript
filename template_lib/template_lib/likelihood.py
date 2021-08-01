@@ -69,8 +69,10 @@ class JointGaussianLikelihood(GaussianLikelihood):
     def __init__(self, *args, join=None, **kwargs):
         super(JointGaussianLikelihood,self).__init__(*args, **kwargs)
         join = join or []
-        join += self.options.get_list('join',default=[])
-        self.join = [self.get_module_from_name(module) if isinstance(module,str) else module for module in join]
+        join += self.options.get_list('join',[])
+        self.join = []
+        for module in join:
+            self.join.append(self.add_module(module))
 
     def setup(self):
         join = {}

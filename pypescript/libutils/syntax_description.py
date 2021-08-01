@@ -50,7 +50,7 @@ def split_sections(word, sep=section_sep, default_section=None):
 
 def join_sections(words, sep=section_sep):
     """Join sections with separator ``sep``."""
-    return section_sep.join(words)
+    return sep.join(words)
 
 
 def search_in_dict(di, *keys):

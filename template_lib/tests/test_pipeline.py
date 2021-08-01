@@ -125,10 +125,19 @@ def test_demo5():
     pipeline.cleanup()
 
 
+def test_demo6():
+    config_fn = os.path.join(demo_dir,'demo6.yaml')
+    pipeline = BasePipeline(config_block=config_fn)
+    pipeline.setup()
+    pipeline.execute()
+    pipeline.cleanup()
+
 
 if __name__ == '__main__':
 
     setup_logging()
+    test_demo6()
+    """
     test_section_names()
     with MemoryMonitor() as mem:
         for i in range(10):
@@ -138,3 +147,4 @@ if __name__ == '__main__':
             test_demo3b()
             test_demo4()
             test_demo5()
+    """

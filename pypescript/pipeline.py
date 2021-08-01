@@ -14,8 +14,13 @@ from .config import ConfigBlock, ConfigError
 
 
 class ModuleTodo(object):
+    """
+    Helper class to run module :meth:`BaseModule.setup`, :meth:`BaseModule.execute` and :meth:`BaseModule.cleanup`,
+    based on each module's :attr:`BaseModule._state` and following decision tree:
 
-    """Helper class to run module :meth:`BaseModule.setup`, :meth:`BaseModule.execute` and :meth:`BaseModule.cleanup`."""
+    - if run 'setup': if state is 'setup' or 'execute', run 'cleanup' first
+    - if run 'execute': if state is 'cleanup', run 'setup' first
+    """
     _decision_tree = {'setup':{'setup':['cleanup','setup'],'execute':['cleanup','setup'],'cleanup':['setup']},
                       'execute':{'setup':['execute'],'execute':['execute'],'cleanup':['setup','execute']},
                       'cleanup':{'setup':['cleanup'],'execute':['cleanup'],'cleanup':[]}}
@@ -118,7 +123,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
     logger = logging.getLogger('BasePipeline')
     _available_options = BaseModule._available_options + [syntax.modules,syntax.setup,syntax.execute,syntax.cleanup]
 
-    def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, description=None, modules=None, setup=None, execute=None, cleanup=None):
+    def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, description=None, pipeline=None, modules=None, setup=None, execute=None, cleanup=None):
         """
         Initalize :class:`BasePipeline`.
 
@@ -138,8 +143,11 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         data_block : DataBlock, default=None
             Structure containing data exchanged between modules. If ``None``, creates one.
 
-        description : dict, default=None
-            Dictionary containing module description.
+        description : string, ModuleDescription, dict, default=None
+            Module description.
+
+        pipeline : BasePipeline
+            Pipeline instance for which this (sub-)pipeline was created.
 
         modules : list, default=None
             List of modules, which will be completed by those in 'setup', 'execute' and 'cleanup' entries of options.
@@ -153,7 +161,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             If ``method`` not specified, defaults to :meth:`BaseModule.execute`.
 
         cleanup : list, default=None
-            List of 'module.method' (``method`` being one of ('setup', 'execute', 'cleanup')) strings.
+            List of 'module:method' (``method`` being one of ('setup', 'execute', 'cleanup')) strings.
             If ``method`` not specified, defaults to :meth:`BaseModule.cleanup`.
         """
         modules = modules or []
@@ -162,7 +170,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         cleanup_todos = cleanup or []
         self.modules = {} # because set_config_block will be called by __init__
         #self._datablock_bcast = []
-        super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block,description=description)
+        super(BasePipeline,self).__init__(name,options=options,config_block=config_block,data_block=data_block,description=description,pipeline=pipeline)
         # modules will automatically inherit config_block, pipe_block, no need to reset set_config_block() and set_data_block()
         modules += self.options.get_list(syntax.modules,default=[])
         setup_todos += self.options.get_list(syntax.setup,default=[])
@@ -197,8 +205,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             for name,value in options.items():
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
-        #self._datablock_set = syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),sep=None)
-        self._datablock_set = {syntax.split_sections(key): value for key,value in syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{})).items()}
+        self._datablock_set = {syntax.split_sections(key):value for key,value in syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),maxdepth=2).items()}
         self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=syntax.section_sep),sep=syntax.section_sep)
         datablock_duplicate = self.options.get(syntax.datablock_duplicate,None)
         if datablock_duplicate is not None:
@@ -214,11 +221,9 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             self.config_block.update(module.config_block)
         for module in self.modules.values():
             module.set_config_block(config_block=self.config_block)
-            module._pipeline = self # hook
 
     def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
         """Prepare :class:`ModuleTodo` instances for setup, execute, and cleanup."""
-        self.modules = self.get_modules(modules)
         setup_todos = setup_todos or []
         execute_todos = execute_todos or []
         cleanup_todos = cleanup_todos or []
@@ -227,52 +232,49 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         for step,todos in zip([syntax.setup_function,syntax.execute_function,syntax.cleanup_function],[setup_todos,execute_todos,cleanup_todos]):
             setattr(self,'{}_todos'.format(step),[])
             for itodo,module_todo in enumerate(todos):
-                split = syntax.split_sections(module_todo)
+                split = syntax.split_sections(module_todo,sep=syntax.module_function_sep)
                 if len(split) == 1:
                     split = (split[0],step)
                 module,todo = split
-                if isinstance(module,str):
-                    module_names = [module.name for module in self.modules]
-                    # first search in loaded modules
-                    if module in module_names:
-                        module = self.modules[module_names.index(module)]
-                    else: # load it
-                        module = self.get_module_from_name(module)
-                        self.modules.append(module)
+                module = self.add_module(module)
                 if module.name not in modules_todo:
                     modules_todo.append(module.name)
                 self_todos = getattr(self,'{}_todos'.format(step))
                 self_todos.append(ModuleTodo(self,module,step=todo))
 
-        for module in self.modules:
+        for name in modules_todo:
+            self.cleanup_todos.append(ModuleTodo(self,self.modules[name],step=syntax.cleanup_function)) # just to make sure cleanup is run
+
+        for module in modules:
+            module = self.add_module(module)
             if module.name not in modules_todo:
                 self.setup_todos.append(ModuleTodo(self,module,step=syntax.setup_function))
                 self.execute_todos.append(ModuleTodo(self,module,step=syntax.execute_function))
-            self.cleanup_todos.append(ModuleTodo(self,module,step=syntax.cleanup_function)) # just to make sure cleanup is run
-        module_names = [module.name for module in self.modules]
-        self.modules = dict(zip(module_names,self.modules))
+                self.cleanup_todos.append(ModuleTodo(self,module,step=syntax.cleanup_function)) # just to make sure cleanup is run
 
-    def get_modules(self, modules):
-        """Return list of :class:`BaseModule` instances, given list of module (pipeline) names or :class:`BaseModule`."""
-        toret = []
-        for module in modules:
-            module_names = [module.name for module in toret]
-            if isinstance(module,str):
-                module_name = module
+    def add_module(self, module):
+        if isinstance(module,str):
+            if module.startswith(syntax.module_reference): # reference to module
+                module = self.fetch_module(module[1:])
+                if module.name in self.modules and module is not self.modules[module.name]:
+                    raise ConfigError('Cannot reference a module with same name as an already loaded module'.format(module.name))
             else:
-                module_name = module.name
-            if module_name in module_names:
-                toret.append(toret[module_names.index(module)])
-            else:
-                if isinstance(module,str):
+                # first search in loaded modules
+                if module in self.modules.keys():
+                    module = self.modules[module]
+                else: # load it
                     module = self.get_module_from_name(module)
-                toret.append(module)
-        return toret
+        if module._pipeline is None: module._pipeline = self
+        self.modules[module.name] = module
+        self.config_block.update(module.config_block)
+        for module in self.modules.values():
+            module.set_config_block(config_block=self.config_block)
+        return module
 
     def get_module_from_name(self, name):
         """Return :class:`BaseModule` instance corresponding to module (pipeline) name."""
         options = SectionBlock(self.config_block,name)
-        return BaseModule.from_filename(name=name,options=options,config_block=self.config_block,data_block=self.pipe_block)
+        return BaseModule.from_filename(name=name,options=options,config_block=self.config_block,data_block=self.pipe_block,pipeline=self)
 
     def setup(self):
         """Set up :attr:`modules`, fed with :attr:`pipe_block`, a copy of :attr:`data_block`."""
@@ -604,7 +606,7 @@ class BatchPipeline(MPIPipeline):
         """Execute subpipeline for each task, either using the command line, or by executing a job script (if ``job_template`` is provided)."""
         self.iconfig_block = self.config_block.copy()
         options = {}
-        options[syntax.execute] = [syntax.join_sections((todo.module.name,todo.step)) for todo in self.execute_todos]
+        options[syntax.execute] = [syntax.join_sections((todo.module.name,todo.step),sep=syntax.module_function_sep) for todo in self.execute_todos]
         options[syntax.datablock_set] = {syntax.join_sections(key):value for key,value in self._datablock_set.items()}
         duplicate = {}
         for key in set(self._datablock_duplicate) | set(self._datablock_key_iter) - set(self._datablock_bcast):

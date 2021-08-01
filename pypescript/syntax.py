@@ -21,6 +21,8 @@ eval_re_pattern = re.compile("e'(.*?)'$")
 format_re_pattern = re.compile("f'(.*?)'$")
 
 section_sep = '.'
+module_function_sep = ':'
+module_reference = '&'
 block_save_extension = '.npy'
 main = 'main'
 setup_function = 'setup'
@@ -50,6 +52,15 @@ class KeywordError(Exception):
     def __str__(self):
         return 'Unknown keyword {}'.format(self.word)
 
+
+def remove_keywords(di, others=None):
+    """Remove **pypescript** keyword entries (and other keys ``others``) from input dictionary ``di``."""
+    toret = {}
+    if others is None: others = []
+    for key,value in di.items():
+        if key not in _keywords and key not in others:
+            toret[key] = value
+    return toret
 
 
 def expand_sections(di, sep=section_sep):

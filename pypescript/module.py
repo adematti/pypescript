@@ -130,7 +130,7 @@ class BaseModule(object,metaclass=MetaModule):
     _available_options = [syntax.module_base_dir,syntax.module_name,syntax.module_file,syntax.module_class,
                             syntax.datablock_set,syntax.datablock_mapping,syntax.datablock_duplicate]
 
-    def __init__(self, name, options=None, config_block=None, data_block=None, description=None):
+    def __init__(self, name, options=None, config_block=None, data_block=None, description=None, pipeline=None):
         """
         Initialise :class:`BaseModule`.
 
@@ -151,6 +151,9 @@ class BaseModule(object,metaclass=MetaModule):
 
         description : string, ModuleDescription, dict, default=None
             Module description.
+
+        pipeline : BasePipeline
+            Pipeline instance for which this module was created.
         """
         self.name = name
         self.description = ModuleDescription(description)
@@ -158,7 +161,7 @@ class BaseModule(object,metaclass=MetaModule):
         self.set_config_block(options=options,config_block=config_block)
         self.set_data_block(data_block=data_block)
         self._cache = {}
-        self._pipeline = None
+        self._pipeline = pipeline
         self._state = syntax.cleanup_function # start with cleanup, (nothing allocated)
 
     def set_config_block(self, options=None, config_block=None):
@@ -183,9 +186,9 @@ class BaseModule(object,metaclass=MetaModule):
             for name,value in options.items():
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
-        self._datablock_set = syntax.expand_sections(syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),sep=syntax.section_sep),sep=syntax.section_sep)
-        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=syntax.section_sep),sep=syntax.section_sep)
-        self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{}),sep=syntax.section_sep),sep=syntax.section_sep)
+        self._datablock_set = {syntax.split_sections(key):value for key,value in syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),maxdepth=2).items()}
+        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{})))
+        self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{})))
         self.check_options()
 
     def check_options(self):
@@ -258,7 +261,7 @@ class BaseModule(object,metaclass=MetaModule):
         if names[0] == syntax.main: # start from root
             while module._pipeline is not None:
                 module = module._pipeline
-            assert module.name == syntax.main
+            assert module.name == syntax.main, module.name
             names = names[1:] # we are in main, skip it
         for name in names:
             if not hasattr(module,'modules'):
@@ -267,7 +270,7 @@ class BaseModule(object,metaclass=MetaModule):
         return module
 
     @classmethod
-    def from_filename(cls, name='module', options=None, config_block=None, data_block=None):
+    def from_filename(cls, name='module', options=None, **kwargs):
         """
         Create :class:`BaseModule`-type module from either module name or module file.
         The imported module can contain the following functions:
@@ -294,11 +297,8 @@ class BaseModule(object,metaclass=MetaModule):
             It should contain an entry 'module_file' OR (exclusive) 'module_name' (w.r.t. 'base_dir', defaulting to '.').
             It may contain an entry 'module_class' containing a class name if the module consists in a class.
 
-        config_block : DataBlock, dict, string, default=None
-            Structure containing configuration options.
-
-        data_block : DataBlock, default=None
-            Structure containing data exchanged between modules. If ``None``, creates one.
+        kwargs : dict
+            Arguments for :meth:`BaseModule.__init__`.
         """
         #if name in _all_loaded_modules:
         #    raise SyntaxError('You should NOT use the same module name in different pipelines. Create a new module, and use configblock_duplicate if useful!')
@@ -371,7 +371,7 @@ class BaseModule(object,metaclass=MetaModule):
 
                 new_cls.set_functions({step:_make_func(module,step) for step in steps})
 
-                return new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
+                return new_cls(name,options=options,description=description,**kwargs)
                 #_all_loaded_modules[name] = toret
                 #return toret
             else:
@@ -395,13 +395,12 @@ class BaseModule(object,metaclass=MetaModule):
                     description = None
             mod_cls = getattr(module,module_class)
             if issubclass(mod_cls,cls): # if subclass of cls, do not create new class
-                toret = mod_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
-            else: # create BaseModule subclass
-                new_cls = MetaModule(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
-                new_cls.set_functions({step:getattr(mod_cls,get_func_name(step)) for step in steps})
-                toret = new_cls(name,options=options,config_block=config_block,data_block=data_block,description=description)
+                return mod_cls(name,options=options,description=description,**kwargs)
+            # create BaseModule subclass
+            new_cls = MetaModule(mod_cls.__name__,(BaseModule,mod_cls),{'__init__':BaseModule.__init__, '__doc__':mod_cls.__doc__})
+            new_cls.set_functions({step:getattr(mod_cls,get_func_name(step)) for step in steps})
+            return new_cls(name,options=options,description=description,**kwargs)
             #_all_loaded_modules[name] = toret
-            return toret
 
     @classmethod
     def plot_inheritance_graph(cls, filename, exclude=None):
