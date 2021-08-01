@@ -230,7 +230,8 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         modules_todo = []
 
         for step,todos in zip([syntax.setup_function,syntax.execute_function,syntax.cleanup_function],[setup_todos,execute_todos,cleanup_todos]):
-            setattr(self,'{}_todos'.format(step),[])
+            self_todos = []
+            setattr(self,'{}_todos'.format(step),self_todos)
             for itodo,module_todo in enumerate(todos):
                 split = syntax.split_sections(module_todo,sep=syntax.module_function_sep)
                 if len(split) == 1:
@@ -239,7 +240,6 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
                 module = self.add_module(module)
                 if module.name not in modules_todo:
                     modules_todo.append(module.name)
-                self_todos = getattr(self,'{}_todos'.format(step))
                 self_todos.append(ModuleTodo(self,module,step=todo))
 
         for name in modules_todo:
@@ -267,8 +267,8 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
         if module._pipeline is None: module._pipeline = self
         self.modules[module.name] = module
         self.config_block.update(module.config_block)
-        for module in self.modules.values():
-            module.set_config_block(config_block=self.config_block)
+        for mod in self.modules.values():
+            mod.set_config_block(config_block=self.config_block)
         return module
 
     def get_module_from_name(self, name):
@@ -361,10 +361,10 @@ class MPIPipeline(BasePipeline):
         Tasks to iterate on in the :meth:`execute` step.
 
     _configblock_iter : dict
-        Mapping of :attr:`config_block` entry to list of values for all iterations.
+        Mapping of :attr:`config_block` entry to callable giving value for each iteration.
 
     _datablock_iter : dict
-        Mapping of :attr:`data_block` entry to list of values for all iterations.
+        Mapping of :attr:`data_block` entry to callable giving value for each iteration.
 
     _datablock_key_iter : dict
         Mapping of :attr:`data_block` entry, to list of :attr:`data_block` keys,
@@ -428,6 +428,9 @@ class MPIPipeline(BasePipeline):
                 todo()
         else:
             key_to_ranks = {key:None for key in self._datablock_bcast}
+            #for key,value in self._configblock_iter.items():
+            #    for task in self._iter:
+            #        print(key,value(task))
 
             with utils.TaskManager(nprocs_per_task=self.nprocs_per_task,mpicomm=self.mpicomm) as tm:
 
