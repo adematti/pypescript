@@ -148,13 +148,15 @@ class Decoder(UserDict):
             Dictionary or path to a configuration *yaml* file to decode.
 
         string : string
-            *yaml* format string to decode. Added on top of ``data``.
+            If not ``None``, *yaml* format string to decode.
+            Added on top of ``data``.
 
         parser : callable, default=yaml_parser
             Function that parses *yaml* string into a dictionary.
+            Used when ``data`` is string, or ``string`` is not ``None``.
 
         decode : bool, default=True
-            Whether to decode configuration dictionary, i.e. solving template forms.
+            Whether to decode configuration dictionary, i.e. solve template forms.
 
         kwargs : dict
             Arguments for :func:`parser`.

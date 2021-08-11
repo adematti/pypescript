@@ -142,8 +142,10 @@ def test_sections():
 
 def test_config():
     config = ConfigBlock('config.yaml')
-    assert config.data == {'hello': {'answer': {'to': 42, 'the': 44}, 'world': 42, 'answer2': 44, 'localpath': 'myglobalpath', syntax.module_name: 'hello'},
-    'testdict': {'a': {'b': {'c': 42}}}, 'world': {'test': ['myglobalpath/tmp.fits','myglobalpath/tmp.fits']}}
+    assert config.data == {'hello': {'answer': {'to': 42, 'the': 44}, 'world': 42, 'answer2': 44, 'localpath': 'myglobalpath', '$module_name': 'hello'},
+    'testdict': {'a': {'b': {'c': 42}}}, 'world': {'test': ['myglobalpath/tmp.fits', 'myglobalpath/tmp.fits']},
+    'testrepeat': {'world': ['answer1', 'answer2'], 'other': 'test1'}, 'answer1': {'is': 'another1'}, 'another1': {'is': '1'}, 'answer2': {'is': 'another2'}, 'another2': {'is': '2'}}
+
     config2 = ConfigBlock(config)
     assert id(config2.data) == id(config.data)
 
@@ -153,7 +155,7 @@ def test_config():
 if __name__ == '__main__':
 
     setup_logging()
-    
+
     with MemoryMonitor() as mem:
         for i in range(2000):
             test_mapping()

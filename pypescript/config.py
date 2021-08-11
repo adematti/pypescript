@@ -11,7 +11,7 @@ from .utils import savefile
 
 class ConfigError(Exception):
 
-    pass
+    """Exception raised when issue with **pypescript** configuration."""
 
 
 class ConfigBlock(DataBlock):
@@ -34,10 +34,12 @@ class ConfigBlock(DataBlock):
             If ``None``, ignored.
 
         string : string, default=None
-            String to be parsed and update ``self`` internal dictionary.
+            If not ``None``, *yaml* format string to decode.
+            Added on top of ``data``.
 
-        parser : callable
-            Parser which turns a string into a dictionary.
+        parser : callable, default=yaml_parser
+            Function that parses *yaml* string into a dictionary.
+            Used when ``data`` is string, or ``string`` is not ``None``.
         """
         if isinstance(data,ConfigBlock):
             block.DataBlock.__init__(self,data=data)

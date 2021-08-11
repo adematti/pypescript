@@ -92,14 +92,13 @@ class CurrentMPIComm(object):
 
 
 class CurrentMPIState(object):
-
     """
     Descriptor for current MPI state of a Python class.
-    - BROADCAST : class "content" (e.g. arrays) broadcast on all ranks
     - SCATTERED : class content scattered on all ranks
-    - GATHERED : class content gathered on root rank.
+    - GATHERED : class content gathered on root rank
+    - BROADCAST : class "content" (e.g. arrays) broadcast on all ranks
     """
-    strs = ['BROADCAST','SCATTERED','GATHERED']
+    strs = ['SCATTERED','GATHERED','BROADCAST']
     ints = list(range(len(strs)))
 
     def __new__(cls, mpistate):
@@ -118,7 +117,6 @@ for i,s in zip(CurrentMPIState.ints,CurrentMPIState.strs):
     setattr(CurrentMPIState,s,i)
 
 
-
 class MPIError(Exception):
 
     """Exception raised when issue with MPI operations."""
@@ -126,7 +124,7 @@ class MPIError(Exception):
 
 def MPIInit(func):
 
-    """:meth:`__init__()` decorator that sets MPI attributes: :attr:`mpiroot`, :attr:`mpicomm` and :attr:`mpistate`."""
+    """:meth:`__init__` decorator that sets MPI attributes: :attr:`mpiroot`, :attr:`mpicomm` and :attr:`mpistate`."""
 
     @functools.wraps(func)
     @CurrentMPIComm.enable
@@ -340,20 +338,18 @@ class MPITaskManager(object):
     def is_root(self):
         """
         Is the current process the root process?
-
-        Root is responsible for distributing the tasks to the other available ranks
+        Root is responsible for distributing the tasks to the other available ranks.
         """
         return self.rank == 0
 
     def is_worker(self):
         """
         Is the current process a valid worker?
-
-        Workers wait for instructions from the master
+        Workers wait for instructions from the master.
         """
         try:
             return self._valid_worker
-        except:
+        except AttributeError:
             raise ValueError('workers are only defined when inside the ``with MPITaskManager()`` context')
 
     def _get_tasks(self):
@@ -539,7 +535,7 @@ class MPITaskManager(object):
         self.basecomm.Barrier()
 
         if self.is_root():
-            self.logger.debug('master is finished; terminating')
+            self.logger.debug('Master is finished; terminating')
 
         CurrentMPIComm.pop()
 

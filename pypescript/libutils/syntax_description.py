@@ -140,17 +140,19 @@ class Decoder(UserDict):
         data : dict, string, default=None
             Dictionary or path to a description *yaml* file to decode.
 
-        string : string
-            *yaml* format string to decode. Added on top of ``data``.
+        string : string, default=None
+            If not ``None``, *yaml* format string to decode.
+            Added on top of ``data``.
 
         parser : callable, default=yaml_parser
             Function that parses *yaml* string into a dictionary.
+            Used when ``data`` is string, or ``string`` is not ``None``.
 
         filename : string, default=None
             Path to description file. Not used if ``data`` is string.
 
         decode : bool, default=True
-            Whether to decode description dictionary, i.e. solving template forms.
+            Whether to decode configuration dictionary, i.e. solve template forms.
 
         decode_eval : bool, default=True
             Whether to decode ``eval`` template forms.

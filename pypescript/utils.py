@@ -601,12 +601,15 @@ class MemoryMonitor(object):
 
     def __init__(self, pid=None, msg=''):
         """
-        Initalise :class:`MemoryMonitor` and register current memory usage.
+        Initalize :class:`MemoryMonitor` and register current memory usage.
 
         Parameters
         ----------
         pid : int, default=None
             Process identifier. If ``None``, use the identifier of the current process.
+
+        msg : string, default=''
+            Additional message.
         """
         import psutil
         self.proc = psutil.Process(os.getpid() if pid is None else pid)
