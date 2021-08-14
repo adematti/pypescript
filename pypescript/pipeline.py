@@ -221,6 +221,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
             self.config_block.update(module.config_block)
         for module in self.modules.values():
             module.set_config_block(config_block=self.config_block)
+        self.check_options()
 
     def set_todos(self, modules=None, setup_todos=None, execute_todos=None, cleanup_todos=None):
         """Prepare :class:`ModuleTodo` instances for setup, execute, and cleanup."""
