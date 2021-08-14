@@ -164,32 +164,39 @@ def snake_to_pascal_case(snake):
     return ''.join(map(str.title,words))
 
 
-def addclslogger(cls):
-    """
-    A class decorator that adds attributes for logging:
-    - logger
-    - methods log_debug, log_info, log_warning, log_error, log_critical
-    """
-    cls.logger = logging.getLogger(cls.__name__)
+class BaseMetaClass(type):
 
-    def _make_logger(level):
+    """Meta class to add logging attributes to :class:`BaseClass` derived classes."""
 
-        @classmethod
-        @mpi.CurrentMPIComm.enable
-        def logger(cls, *args, rank=None, extra=None, mpicomm=None, **kwargs):
-            if rank is None or mpicomm.rank == rank:
-                getattr(cls.logger,level)(*args,**kwargs)
+    def __new__(meta, name, bases, class_dict):
+        cls = super().__new__(meta, name, bases, class_dict)
+        cls.set_logger()
+        return cls
 
-        return logger
+    def set_logger(cls):
+        """
+        Add attributes for logging:
 
-    for level in ['debug','info','warning','error','critical']:
-        setattr(cls,'log_{}'.format(level),_make_logger(level))
+        - logger
+        - methods log_debug, log_info, log_warning, log_error, log_critical
+        """
+        cls.logger = logging.getLogger(cls.__name__)
 
-    return cls
+        def make_logger(level):
+
+            @classmethod
+            @mpi.CurrentMPIComm.enable
+            def logger(cls, *args, rank=None, extra=None, mpicomm=None, **kwargs):
+                if rank is None or mpicomm.rank == rank:
+                    getattr(cls.logger,level)(*args,**kwargs)
+
+            return logger
+
+        for level in ['debug','info','warning','error','critical']:
+            setattr(cls,'log_{}'.format(level),make_logger(level))
 
 
-@addclslogger
-class BaseTaskManager(object):
+class BaseTaskManager(metaclass=BaseMetaClass):
     """A dumb task manager, that simply iterates through the tasks in series."""
 
     @mpi.CurrentMPIComm.enable
@@ -271,7 +278,9 @@ def TaskManager(mpicomm=None, nprocs_per_task=1, **kwargs):
     return self
 
 
-class _BaseClass(object):
+class _BaseClass(metaclass=BaseMetaClass):
+
+    _copy_if_datablock_copy = False
 
     def __setstate__(self, state):
         """Set the class state dictionary."""
@@ -325,7 +334,6 @@ class _BaseClass(object):
         return copy.deepcopy(self)
 
 
-@addclslogger
 class ScatteredBaseClass(_BaseClass):
     """
     Base template for **pypescript** MPI classes.
@@ -342,7 +350,6 @@ class ScatteredBaseClass(_BaseClass):
     mpiroot : int
         MPI root rank.
     """
-
     @mpi.MPIInit
     def __init__(self, **attrs):
         self.attrs = attrs
@@ -526,7 +533,6 @@ class ScatteredBaseClass(_BaseClass):
         if isscattered: self.mpi_scatter()
 
 
-@addclslogger
 class BaseClass(_BaseClass):
     """
     Base template for **pypescript** MPI classes.

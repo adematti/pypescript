@@ -206,7 +206,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
         self._datablock_set = {syntax.split_sections(key):value for key,value in syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),maxdepth=2).items()}
-        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{}),sep=syntax.section_sep),sep=syntax.section_sep)
+        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{})),sep=syntax.section_sep)
         datablock_duplicate = self.options.get(syntax.datablock_duplicate,None)
         if datablock_duplicate is not None:
             if isinstance(datablock_duplicate,list):

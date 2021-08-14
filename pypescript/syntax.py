@@ -29,6 +29,7 @@ setup_function = 'setup'
 execute_function = 'execute'
 cleanup_function = 'cleanup'
 common_sections = [section_names.common]
+copy_if_datablock_copy = '_copy_if_datablock_copy'
 
 _keyword_names = ['module_base_dir','module_name','module_file','module_class',\
 'datablock_set','datablock_mapping','datablock_duplicate',

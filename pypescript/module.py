@@ -10,6 +10,7 @@ from .config import ConfigBlock, ConfigError
 from .libutils import ModuleDescription, syntax_description
 from . import syntax, section_names
 from . import utils
+from .utils import BaseMetaClass
 
 
 def _import_pygraphviz():
@@ -57,7 +58,7 @@ def mimport(module_name, module_file=None, module_class=None, name=None, data_bl
     return BaseModule.from_filename(name=name,data_block=data_block,options=options)
 
 
-class MetaModule(type):
+class MetaModule(BaseMetaClass):
 
     """Meta class to replace :meth:`setup`, :meth:`execute` and :meth:`cleanup` module methods."""
 
@@ -104,7 +105,6 @@ class MetaModule(type):
             setattr(cls,step,make_wrapper(step,fun))
 
 
-@utils.addclslogger
 class BaseModule(object,metaclass=MetaModule):
     """
     Base module class, which wraps pure Python modules or Python C extensions.
@@ -187,8 +187,8 @@ class BaseModule(object,metaclass=MetaModule):
                 self.config_block[self.name,name] = value
         self.options = SectionBlock(self.config_block,self.name)
         self._datablock_set = {syntax.split_sections(key):value for key,value in syntax.collapse_sections(self.options.get_dict(syntax.datablock_set,{}),maxdepth=2).items()}
-        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{})))
-        self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{})))
+        self._datablock_mapping = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_mapping,{})),sep=syntax.section_sep)
+        self._datablock_duplicate = BlockMapping(syntax.collapse_sections(self.options.get_dict(syntax.datablock_duplicate,{})),sep=syntax.section_sep)
         self.check_options()
 
     def check_options(self):

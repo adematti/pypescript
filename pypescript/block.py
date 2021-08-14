@@ -213,7 +213,8 @@ class DataBlock(block.DataBlock,BaseClass):
 
     def copy(self, nocopy=None):
         """
-        Return a shallow copy of ``self``, i.e. only the dictionary mapping to the stored items is copied, not the items themselves.
+        Return a shallow copy of ``self``, i.e. only the dictionary mapping to the stored items is copied.
+        The items themselves are not copied, except if they have an attribute ``_copy_if_datablock_copy`` set to ``True``.
 
         Parameters
         ----------
@@ -228,7 +229,18 @@ class DataBlock(block.DataBlock,BaseClass):
         """
         if nocopy is None:
             nocopy = [section for section in syntax.common_sections if section in self]
-        return self.__class__(super(DataBlock,self).copy(nocopy=nocopy),add_sections=[])
+        new = self.__class__(mapping=self.mapping,add_sections=[])
+        for section in self.sections():
+            if section in nocopy:
+                new[section] = self[section]
+                continue
+            new_section = {}
+            for name,value in self[section].items():
+                if getattr(value,syntax.copy_if_datablock_copy,False):
+                    value = value.copy()
+                new_section[name] = value
+            new[section] = new_section
+        return new
 
     def update(self, other, nocopy=None):
         """
