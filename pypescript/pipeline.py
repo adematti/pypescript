@@ -27,7 +27,7 @@ class ModuleTodo(object):
 
     def __init__(self, pipeline, module, step):
         """
-        Instantiate :class:`ModuleTodo`.
+        Initialize :class:`ModuleTodo`.
 
         Parameters
         ----------
@@ -96,7 +96,7 @@ class MetaPipeline(MetaModule):
                     raise RuntimeError('Exception in function {} of {} [{}].'.format(step,self.__class__.__name__,self.name)) from exc
 
                 for keyg,keyl in self._datablock_duplicate.items():
-                    if keyl in self.data_block:
+                    if keyg != keyl and keyl in self.data_block:
                         #print('db',self.name,keyg,keyl,id(self.data_block[keyl]))
                         self.data_block[keyg] = self.data_block[keyl]
                     elif keyl in self.pipe_block: # because not necessarily present at each step...
@@ -125,7 +125,7 @@ class BasePipeline(BaseModule,metaclass=MetaPipeline):
 
     def __init__(self, name=syntax.main, options=None, config_block=None, data_block=None, description=None, pipeline=None, modules=None, setup=None, execute=None, cleanup=None):
         """
-        Initalize :class:`BasePipeline`.
+        Initialize :class:`BasePipeline`.
 
         Parameters
         ----------

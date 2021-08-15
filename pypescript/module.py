@@ -132,7 +132,7 @@ class BaseModule(object,metaclass=MetaModule):
 
     def __init__(self, name, options=None, config_block=None, data_block=None, description=None, pipeline=None):
         """
-        Initialise :class:`BaseModule`.
+        Initialize :class:`BaseModule`.
 
         Parameters
         ----------
