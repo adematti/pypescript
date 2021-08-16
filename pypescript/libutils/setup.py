@@ -200,7 +200,7 @@ class setup(object):
                 libraries=None,
                 **kwargs):
         """
-        Initialise :class:`setup` and call :func:`numpy.distutils.core.setup` to install the **pypescript** library.
+        Initialize :class:`setup` and call :func:`numpy.distutils.core.setup` to install the **pypescript** library.
         Most arguments are similar to those of :func:`numpy.distutils.core.setup`.
         Only supplementary arguments are:
 

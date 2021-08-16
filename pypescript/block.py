@@ -29,7 +29,7 @@ class BlockMapping(block.BlockMapping,BaseClass):
     """
     def __init__(self, data=None, sep=None):
         """
-        Initialise :class:`BlockMapping`.
+        Initialize :class:`BlockMapping`.
 
         Parameters
         ----------
@@ -120,7 +120,7 @@ class DataBlock(block.DataBlock,BaseClass):
 
     def __init__(self, data=None, mapping=None, add_sections=None):
         """
-        Initialise :class:`DataBlock`.
+        Initialize :class:`DataBlock`.
 
         Parameters
         ----------
@@ -327,7 +327,7 @@ class SectionBlock(object):
 
     def __init__(self, block, section):
         """
-        Initialise :class:`SectionBlock`.
+        Initialize :class:`SectionBlock`.
 
         Parameters
         ----------

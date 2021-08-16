@@ -17,7 +17,7 @@ class ModuleDescription(UserDict):
 
     def __init__(self, data=None, string=None, parser=None, **kwargs):
         """
-        Initialise :class:`ModuleDescription`.
+        Initialize :class:`ModuleDescription`.
 
         Parameters
         ----------

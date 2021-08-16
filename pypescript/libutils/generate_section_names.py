@@ -14,7 +14,7 @@ class SectionNames(UserList):
 
     def __init__(self, data=None, max_string_length=256):
         """
-        Initialise :class:`SectionNames`.
+        Initialize :class:`SectionNames`.
 
         Parameters
         ----------

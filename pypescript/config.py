@@ -23,7 +23,7 @@ class ConfigBlock(DataBlock):
 
     def __init__(self, data=None, string=None, parser=None):
         """
-        Initialise :class:`ConfigBlock`.
+        Initialize :class:`ConfigBlock`.
 
         Parameters
         ----------
