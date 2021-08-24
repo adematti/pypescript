@@ -12,7 +12,7 @@ and a common covariance matrix ``cov``. Our parameter ``.yaml`` file would then 
 .. code-block:: yaml
 
   main:
-    modules: [like]
+    $modules: [like]
 
   like:
     $module_name: template_lib.likelihood
@@ -125,7 +125,7 @@ We think it also makes the pipeline structure more readable.
 Yet, this may not be sufficient in some corner cases; we may e.g. want to save the result of a given operation (e.g. derived parameter)
 performed at some position in the tree. This is made possible by using the keyword ``datablock_copy`` in any module section of the configuration file/dictionary::
 
-  datablock_duplicate:
+  $datablock_duplicate:
     section2.name2: section1.name1
 
 will (shallow!) copy the element from ``data_block`` entry ``(section1, name1)`` to entry ``(section2, name2)`` at each step (``setup``, ``execute``, ``cleanup``).
@@ -133,7 +133,7 @@ There is a global (i.e. shared by all modules whatever their depth) section: 'co
 
 One can also locally (i.e. in one module or subpipeline) map a ``data_block`` entry ``(section1, name1)`` to entry ``(section2, name2)``::
 
-  datablock_mapping:
+  $datablock_mapping:
     section2.name2: section1.name1
 
 Unlike ``datablock_duplicate``, this works as a reference: any change in the value pointed by entry ``(section1, name1)`` is visible by ``(section2, name2)``.
@@ -141,7 +141,7 @@ This can be useful in case one wants to cast modules-specific parameters to thei
 
 Eventually, one can locally set ``data_block`` entries using e.g.::
 
-  datablock_set:
+  $datablock_set:
     section2.name2: 42
 
 To summarise:
@@ -264,10 +264,10 @@ One can generate on-the-fly configuration with the syntax "$(%)":
 .. code-block:: yaml
 
   main:
-    modules: [model$(1), model$(2)]
+    $modules: [model$(1), model$(2)]
 
   model$(%):
-    modules: [base$(%)]
+    $modules: [base$(%)]
 
   base$(%):
     value: e'%$ + 1'
@@ -277,16 +277,16 @@ is equivalent to:
 .. code-block:: yaml
 
   main:
-    modules: [model1, model2]
+    $modules: [model1, model2]
 
   model1:
-    modules: [base1]
+    $modules: [base1]
 
   base1:
     value: 2
 
   model2:
-    modules: [base2]
+    $modules: [base2]
 
   base2:
     value: 3

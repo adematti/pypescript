@@ -25,9 +25,6 @@ def exception_handler(exc_type, exc_value, exc_traceback):
         log.critical('Interrupted by the user.')
     else:
         log.critical('An error occured.')
-    # Exit all MPI processes
-    #PM: removed so can catch exception outside
-    #os._exit(1)
 
 
 def is_of_type(value, types):
