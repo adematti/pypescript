@@ -101,7 +101,10 @@ class Extension(_Extension):
 
 
 class build_src(_build_src):
-    """Extend :class:`numpy.distutils.build_src.build_src` to generate the C file necessary to turn C/C++/Fortran sources into Python extension modules."""
+    """
+    Extend :class:`numpy.distutils.build_src.build_src` to generate the C file
+    necessary to turn C/C++/Fortran sources into Python extension modules.
+    """
 
     def build_extension_sources(self, ext):
 
@@ -177,7 +180,6 @@ class build_src(_build_src):
 # do not override NumpyDistribution as numpy.distutils.setup calls distutils.setup() with NumpyDistribution
 
 class setup(object):
-
     """Class that extends the :func:`numpy.distutils.core.setup` function to setup a **pypescript** library."""
 
     def __init__(self,

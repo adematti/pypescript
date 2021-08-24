@@ -601,7 +601,7 @@ class MemoryMonitor(object):
     Class that monitors memory usage and clock, useful to check for memory leaks.
 
     >>> with MemoryMonitor() as mem:
-            '''do womething'''
+            '''do something'''
             mem()
             '''do something else'''
     """
@@ -630,7 +630,6 @@ class MemoryMonitor(object):
 
     def __enter__(self):
         """Enter context."""
-        pass
 
     def __call__(self):
         """Update memory usage."""
