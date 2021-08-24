@@ -21,7 +21,7 @@ def exception_handler(exc_type, exc_value, exc_traceback):
     line = '='*100
     #log.critical(line[len(_logger_name) + 5:] + '\n' + ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)) + line)
     log.critical('\n' + line + '\n' + ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)) + line)
-    if exc_type == KeyboardInterrupt:
+    if exc_type is KeyboardInterrupt:
         log.critical('Interrupted by the user.')
     else:
         log.critical('An error occured.')
