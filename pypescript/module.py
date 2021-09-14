@@ -361,7 +361,7 @@ class BaseModule(object,metaclass=MetaModule):
                     raise ImportError('Description file {} describes multiple modules while there is only one in {}'.format(description_file,base_module_name))
                 new_cls = MetaModule(name_cls,(BaseModule,),{'__init__':BaseModule.__init__, '__doc__':BaseModule.__doc__})
 
-                def _make_func(module,step):
+                def _make_func(module, step):
                     mod_func = getattr(module,get_func_name(step))
 
                     def func(self):

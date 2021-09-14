@@ -102,7 +102,7 @@ def walk_pype_modules(base_dir='.', include_pype_module_names=None, exclude_pype
 
     include_pype_module_names : list, default=None
         List of module names (w.r.t. ``base_dir``) or regex to include.
-        If not ``None``, all modules in ``base_dir`` are considered.
+        If ``None``, all modules in ``base_dir`` are considered.
 
     exclude_pype_module_names : list, default=None
         List of module names (w.r.t. ``base_dir``) or regex to exclude.

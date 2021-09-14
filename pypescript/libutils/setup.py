@@ -198,6 +198,7 @@ class setup(object):
                 ext_modules=None,
                 pype_module_names=None,
                 install_requires=None,
+                extras_require=None,
                 data_files=None,
                 libraries=None,
                 **kwargs):
@@ -214,10 +215,11 @@ class setup(object):
         sections : string, list, default='.'
             Section name *yaml* file, or list of sections (strings).
 
-        pype_module_names : string, default=None
+        pype_module_names : string, dict, default=None
             Name of file containing a list of modules (w.r.t. ``base_dir``) to install.
             See :func:`utils.read_path_list`.
-            If not ``None``, all modules in ``base_dir`` are considered.
+            If ``None``, all modules in ``base_dir`` are considered.
+            Can be a dictionary of identifiers: list of modules, following the ``extras_require`` syntax of :func:`numpy.distutils.core.setup`.
         """
         self.base_dir = base_dir
         self.section_dir = os.path.join('build','sections')
@@ -253,24 +255,30 @@ class setup(object):
         data_files = list(data_files or [])
         libraries = list(libraries or [])
         install_requires = list(install_requires or [])
-        pype_module_names = pype_module_names or (None,)*2
+        extras_require = dict(extras_require or {})
 
-        if isinstance(pype_module_names,str):
-            include_pype_module_names, exclude_pype_module_names = utils.read_path_list(pype_module_names)
-        else:
-            include_pype_module_names, exclude_pype_module_names = pype_module_names
+        if not isinstance(pype_module_names,dict):
+            pype_module_names = {'all':pype_module_names}
 
-        self.set_pype_modules(include_pype_module_names=include_pype_module_names,exclude_pype_module_names=exclude_pype_module_names)
-        py_modules += self.pype_modules
-        pype_ext_modules = self.pype_ext_modules
+        self.has_fortran_sources = False
+        self.pype_modules, self.pype_ext_modules, self.description_files = set(), set(), set()
+        for extra_name,pype_modules in pype_module_names.items():
+            if pype_modules is None:
+                pype_modules = (None,)*2
+            if isinstance(pype_modules,str):
+                include_pype_module_names, exclude_pype_module_names = utils.read_path_list(pype_modules)
+            else:
+                include_pype_module_names, exclude_pype_module_names = pype_modules
+            extras_require.setdefault(extra_name,set())
+            extras_require[extra_name] = list(extras_require[extra_name] |
+                                            self.set_pype_modules(include_pype_module_names=include_pype_module_names,exclude_pype_module_names=exclude_pype_module_names))
+
         #data_files += [(os.path.relpath(os.path.dirname(file),start=self.base_dir),[file]) for file in self.description_files]
         data_files += [(os.path.relpath(os.path.dirname(file),start='.'),[file]) for file in self.description_files]
-        install_requires += self.pype_module_requires
+        py_modules = list(set(py_modules) | self.pype_modules)
+        ext_modules += list(self.pype_ext_modules)
 
-        ext_modules += pype_ext_modules
-        install_requires = list(set(install_requires)) # remove duplicates
-
-        if pype_ext_modules:
+        if self.pype_ext_modules:
             for section_fn in self.section_fns:
                 if not hasattr(self.sections,'filename') or newer_group([self.sections.filename],section_fn):
                     self.sections.save(section_fn)
@@ -307,6 +315,7 @@ class setup(object):
               py_modules=py_modules,
               ext_modules=ext_modules,
               install_requires=install_requires,
+              extras_require=extras_require,
               cmdclass={'build_src':build_src,'develop':develop},
               data_files=data_files,
               libraries=libraries,
@@ -316,10 +325,9 @@ class setup(object):
         """
         Set modules to install.
         Split modules into Python extensions (i.e. to be compiled) :attr:`pype_ext_modules` and standard Python modules :attr:`pype_modules`.
-        It also gathers the requirements from each module as specified in their description file into the list :attr:`pype_module_requires`.
+        It also returns the requirements from each module as specified in their description file.
         """
-        self.has_fortran_sources = False
-        extensions,modules,description_files,requirements = set(),set(),set(),set()
+        extensions, modules, description_files, requirements = set(), set(), set(), set()
         for module_dir,full_name,description_file,description in\
             utils.walk_pype_modules(base_dir=self.base_dir,
                                     include_pype_module_names=include_pype_module_names,
@@ -357,7 +365,7 @@ class setup(object):
                     modules.add(full_name)
             else:
                 modules.add(full_name)
-        self.pype_modules = list(modules)
-        self.pype_ext_modules = list(extensions)
-        self.description_files = list(description_files)
-        self.pype_module_requires = list(requirements)
+        self.pype_modules |= set(modules)
+        self.pype_ext_modules |= set(extensions)
+        self.description_files |= set(description_files)
+        return requirements
