@@ -9,7 +9,6 @@ dependencies:
 - pip
 - pyyaml
 - numpy
-- mpi4py
 - matplotlib
 - sphinx
 - sphinx_rtd_theme
