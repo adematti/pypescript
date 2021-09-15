@@ -271,13 +271,13 @@ class Decoder(UserDict):
         def callback(di):
             toret = {}
             for key,value in di.items():
-                replace = self.decode_replace(key)
+                replace = self.decode_replace(key,di=di)
                 if replace is not None:
                     if value is not None:
-                        raise ParserError('Key is to be replaced, but value is not None in {}: {}'.format(key,value))
+                        raise ParserError('Key is to be replaced (for import), but value is not None in {}: {}'.format(key,value))
                     toret = callback({**replace,**toret})
                     continue
-                replace = self.decode_replace(value)
+                replace = self.decode_replace(value,di=di)
                 if replace is not None:
                     toret[key] = replace
                 else:
@@ -291,16 +291,16 @@ class Decoder(UserDict):
         # interpret f'', e''
         def callback(di):
             toret = di.copy()
-            items = list(di.items()) if isinstance(di,dict) else list(enumerate(di))
-            for key,value in items:
+            if not isinstance(di,dict): di = dict(list(enumerate(di)))
+            for key,value in di.items():
                 if isinstance(value,(dict,list)):
                     toret[key] = callback(value)
                     continue
-                decode = self.decode_format(value)
+                decode = self.decode_format(value,di=di)
                 if decode is not None:
                     toret[key] = decode
                     continue
-                decode = self.decode_eval(value)
+                decode = self.decode_eval(value,di=di)
                 if decode is not None:
                     toret[key] = decode
                     continue
@@ -422,9 +422,11 @@ class Decoder(UserDict):
             if placeholder is not None:
                 return word.replace('$%',placeholder)
 
-    def decode_replace(self, word):
+    def decode_replace(self, word, di=None):
         """
-        If ``word`` matches template ``${filename:section.name}``, return corresponding value in configuration file at path ``filename``,
+        If ``word`` matches template ``${section.name}``, return corresponding value in the configuration file at ``section`` , ``name`` keys
+        (if only ``name`` provided, search first into current section dictionary ``di`` if not ``None``).
+        Else if ``word`` matches template ``${filename:section.name}``, return corresponding value in configuration file at path ``filename``,
         at ``section`` , ``name`` keys.
         Else return ``None``.
         """
@@ -434,7 +436,13 @@ class Decoder(UserDict):
                 fn_sections = m.group(1).split(':')
                 sections = split_sections(fn_sections[-1])
                 if len(fn_sections) == 1:
-                    toret = self.search(*sections)
+                    if di is not None and len(sections) == 1:
+                        try:
+                            toret = di[sections[0]]
+                        except KeyError:
+                            toret = self.search(*sections)
+                    else:
+                        toret = self.search(*sections)
                 elif len(fn_sections) == 2:
                     fn = os.path.join(self.base_dir,fn_sections[0])
                     if fn in self._cache:
@@ -447,7 +455,7 @@ class Decoder(UserDict):
                         toret = new.search(*sections)
                 else:
                     raise ParserError('Cannot parse {} as it contains multiple colons'.format(word))
-                replace = self.decode_replace(toret)
+                replace = self.decode_replace(toret,di=di)
                 if replace is not None:
                     return copy.deepcopy(replace)
                 return toret
@@ -462,9 +470,10 @@ class Decoder(UserDict):
             if m:
                 return split_sections(m.group(1))
 
-    def decode_eval(self, word):
+    def decode_eval(self, word, di=None):
         """
         If ``word`` matches template ``e'42 + ${filename:section.name}', return ``42 + value``
+        (``di`` is the local section dictionary, to be used for replacements - see :meth:`decode_replace`).
         Else return ``None``.
         """
         if isinstance(word,str):
@@ -475,7 +484,7 @@ class Decoder(UserDict):
                 replaces = re.finditer('(\${.*?})', words)
                 dglobals = {'np':np}
                 for ireplace,replace in enumerate(replaces):
-                    value = self.decode_replace(replace.group(1))
+                    value = self.decode_replace(replace.group(1),di=di)
                     x = '__replace_{:d}__'.format(ireplace)
                     if x in words: # in case it's already in there
                         raise ParserError('Please do not use {} in your expression'.format(x))
@@ -483,9 +492,10 @@ class Decoder(UserDict):
                     dglobals[x] = value
                 return eval(words,dglobals,{})
 
-    def decode_format(self, word):
+    def decode_format(self, word, di=None):
         """
         If ``word`` matches template ``f'here is the value: ${filename:section.name}'``, return ``'here is the value: value'``
+        (``di`` is the local section dictionary, to be used for replacements - see :meth:`decode_replace`).
         Else return ``None``.
         """
         if isinstance(word,str):
@@ -495,5 +505,5 @@ class Decoder(UserDict):
                 word = m.group(1)
                 replaces = re.finditer('(\${.*?})', word)
                 for ireplace,replace in enumerate(replaces):
-                    word = word.replace(replace.group(1),self.decode_replace(replace.group(1)))
+                    word = word.replace(replace.group(1),self.decode_replace(replace.group(1),di=di))
                 return word

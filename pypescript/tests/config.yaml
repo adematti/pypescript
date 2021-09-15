@@ -2,6 +2,7 @@ hello:
   world: 42
   ${config2.yaml:}:
   answer2: ${config2.yaml:answer.the}
+  localpath2: ${localpath}
   localpath: ${path}
   $module_name: hello
 

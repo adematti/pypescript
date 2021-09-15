@@ -188,8 +188,9 @@ One can refer to values define in any part of the configuration file through the
   ultimate:
     question: ${answer.to}
     of: ${the}
+    of2: ${of}
 
-Here ``${answer.to}`` will be replaced by 42, and ``${the}`` by 84.
+Here ``${answer.to}`` will be replaced by 42 and ``${the}`` by 84. By default, ``${name}`` refers to the same section, hence ``${of}`` will be replaced by 84.
 Note that since ``(section, name)`` only fields are retained, the original ``the`` entry will be discarded in the rest of the pipeline.
 One can also refer to another configuration file, using the syntax: ``${path_to_other_file:answer.to}:``.
 
