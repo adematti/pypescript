@@ -11,9 +11,10 @@ sphinx:
 
 # Optionally set the version of Python and requirements required to build your docs
 conda:
-   environment: doc/environment.yaml
+  environment: doc/environment.yaml
 
 python:
-   install:
-      - method: pip
-        path: .
+  version: "3.8"
+  install:
+    - method: pip
+      path: .
