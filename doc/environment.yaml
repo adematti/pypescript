@@ -9,6 +9,10 @@ dependencies:
 - pip
 - pyyaml
 - numpy
+- scipy
+- mpi4py
 - matplotlib
 - sphinx
 - sphinx_rtd_theme
+- pip:
+  - git+https://github.com/adematti/pypescript
