@@ -49,6 +49,7 @@ When creating new sections, it is good practice to add them to :root:`pypescript
 and use the Python variable instead, e.g. ``section_names.my_section`` (to avoid typos).
 
 It is also fairly easy to write modules for **pypescript** in C/C++/Fortran. Examples are provided in the template library :mod:`~pypescript.template_lib`:
+
   - C: :mod:`~pypescript.template_lib.module_c.module.c`
   - C++: :mod:`~pypescript.template_lib.module_cpp.module.cpp`
   - Fortran: :mod:`~pypescript.template_lib.module_f90.module.f90`

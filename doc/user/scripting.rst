@@ -33,20 +33,27 @@ and a common covariance matrix ``cov``. Our parameter ``.yaml`` file would then 
   data1:
     $module_name: template_lib.data_vector
     # details about how to get the data vector #1
+    y: [1.0,1.0,1.0,1.0,1.0]
 
   model1:
     # details about model #1
+    $module_name: template_lib.model
+    $module_class: FlatModel
 
   data2:
     $module_name: template_lib.data_vector
     # details about how to get the data vector #2
+    y: [1.0,1.0,1.0]
 
   model2:
-   # details about model #2
+    # details about model #2
+    $module_name: template_lib.model
+    $module_class: FlatModel
 
   cov:
-    $module_name: template_lib.covariance
     # details about how to get the common covariance
+    $module_name: template_lib.covariance
+    yerr: [1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0]
 
 
 Here module names (left aligned) can be of any name, except ``main`` which is the entry to the pipeline.
@@ -55,9 +62,17 @@ list the modules they run.
 
 .. note::
 
-  All **pypescript** keywords start witht the Dollar sign $
+  All **pypescript** keywords start with the Dollar sign $
 
-One can achieve the same pipeline in Python with (for a theory model called :mod:`~template_lib.model.FlatModel`):
+If the configuration file above is saved in 'config_file.yaml', and you have installed ``template_lib`` by running e.g.::
+
+  python setup.py develop
+
+in :root:`template_lib', then the example above can be launched as::
+
+  pypescript config_file.yaml
+
+One can achieve the same pipeline in Python with:
 
 .. code-block:: python
 
@@ -65,7 +80,7 @@ One can achieve the same pipeline in Python with (for a theory model called :mod
   from template_lib.model import FlatModel
   from template_lib.likelihood import BaseLikelihood, JointGaussianLikelihood
 
-  config_block = ConfigBlock(config_fn)
+  config_block = ConfigBlock('config_file.yaml')
   data1 = BaseModule.from_filename(name='data1',options=SectionBlock(config_block,'data1'))
   model1 = FlatModel(name='model1')
   data2 = BaseModule.from_filename(name='data2',options=SectionBlock(config_block,'data2'))
@@ -76,7 +91,8 @@ One can achieve the same pipeline in Python with (for a theory model called :mod
   like = JointGaussianLikelihood(name='like',join=[like1,like2],modules=[cov])
   pipeline = BasePipeline(modules=[like])
 
-Here ``options`` can be simple dictionaries (:class:`~pypescript.block.SectionBlock` simply takes a slice of ``config_block`` for the given section).
+Here we used the configuration file above saved in 'config_file.yaml',
+but ``options`` can be simple dictionaries (:class:`~pypescript.block.SectionBlock` simply takes a slice of ``config_block`` for the given section).
 You can also modify each module's ``data_block`` at your will.
 There is really no more complexity than using Python classes successively, with **pypescript** holding all these classes.
 So even if you do not like the **pypescript** framework, you can still use **pypescript** modules very easily in your own code.
@@ -102,13 +118,18 @@ Similarly, modules are agnostic about the operations performed by other modules.
 This is key to ensuring modules do not need to be modified when adding new ones.
 
 Hence, the pipeline integrity is ensured by the user script.
-The main difficulty is to ensure that each module takes the input of the preceding module at the relevant entry ``(section, name)``
+The main difficulty is to ensure that each module takes the input of a previous module at the relevant entry ``(section, name)``
 of ``data_block``, the :class:`~pypescript.block.DataBlock` instance passed to all modules (see :ref:`user-framework`).
 
+
+data_block
+^^^^^^^^^^
+
 CosmoSIS implements a linear pipeline: all modules form a single chain.
-Instead, we allow for a tree-like structure, which is explored depth-first, left to right.
-Both approaches would be fully equivalent if the ``data_block`` were a global variable for all modules.
-Instead, contrary to CosmoSIS, each (sub)pipeline creates (at initialisation only) a (shallow!) datablock_copy of the ``data_block`` to be passed to its modules.
+Instead, we allow for a tree-like structure, which is explored depth-first, left to right, where nodes are (sub)pipelines (see below).
+Both approaches would be fully equivalent if the ``data_block`` were a global variable for all modules (within all (sub)pipelines).
+Instead, contrary to CosmoSIS, each (sub)pipeline creates (at initialisation only) a (shallow!) copy of the ``data_block`` to be passed to its modules
+(at the exception of :class:`StreamPipeline`).
 
 .. note::
 
@@ -123,7 +144,7 @@ This allows modules to *update* (for them) previous entries in ``data_block`` an
 Then, most of the links between module input and output entries is encoded in the pipeline structure itself.
 We think it also makes the pipeline structure more readable.
 Yet, this may not be sufficient in some corner cases; we may e.g. want to save the result of a given operation (e.g. derived parameter)
-performed at some position in the tree. This is made possible by using the keyword ``datablock_copy`` in any module section of the configuration file/dictionary::
+performed at some position in the tree. This is made possible by using the keyword ``datablock_duplicate`` in any module section of the configuration file/dictionary::
 
   $datablock_duplicate:
     section2.name2: section1.name1
@@ -144,8 +165,8 @@ Eventually, one can locally set ``data_block`` entries using e.g.::
   $datablock_set:
     section2.name2: 42
 
-To summarise:
-  - we allow for a tree-like structure
+To summarize:
+  - we allow for a tree-like structure, where ``data_block`` is (shallow) copied at each node.
   - any change to ``data_block`` is local within a given (sub)pipeline
   - the section where changes are global (effective for the whole pipeline) is 'common'
   - if necessary, any entry of ``data_block`` can be moved anywhere (including the 'global' sections) with the keyword ``datablock_duplicate`` in the configuration file/dictionary
@@ -153,21 +174,176 @@ To summarise:
 
 .. note::
 
-  Our framework is therefore a generalisation of the CosmoSIS structure.
+  Our framework therefore generalizes the CosmoSIS structure.
   Therefore, one can always stick to the CosmoSIS structure if more intuitive.
 
+
+(sub)pipelines
+^^^^^^^^^^^^^^
+
+There are several pre-defined pipelines in **pypescript**, but one can implement others in **pypescript** libraries.
+These pre-defined pipelines are :class:`BasePipeline`, :class:`StreamPipeline`, :class:`MPIPipeline`, :class:`BatchPipeline`.
+:class:`StreamPipeline`, :class:`MPIPipeline` and :class:`BatchPipeline` all inherit from :class:`BasePipeline`, which implements
+the common behavior described below. Then we will explain the differences between :class:`StreamPipeline`, :class:`MPIPipeline` and :class:`BatchPipeline`.
+
+Generally, a :class:`BasePipeline`-inherited pipeline will instantiate and call (either  ``setup``, ``execute`` or ``cleanup``) several modules,
+that will perform some operations (take some input from and add output to ``data_block``).
+
 .. note::
 
-  It is left to the user not to generate module reference loops in their pipeline.
+  In the example above, if ``model1`` and ``model2`` had the same options, one could equivalently specify ``model`` options
+  once and have ``$modules: [data1, model]`` and ``$modules: [data2, model]`` in ``like1`` and ``like2``, respectively.
+  Behind the scenes, the ``model`` module will be instantiated independently in ``like1`` and ``like2`` (though with the same options).
+
+Then, one can specify the operations to be performed at each step of the subpipeline, e.g.::
+
+  $modules: [data1, model1]
+
+is equivalent to::
+
+  $setup: [data1, model1]
+  $execute: [data1, model1]
+  $cleanup: [data1, model1]
+
+(the last line being optional, as all modules will be cleaned up eventually). This means that when the pipeline is set up,
+it will call successively ``setup`` of ``data1`` and ``model1`` (same for execute and clean up).
+
+If we want e.g. ``model1`` to be set up at the ``execute`` step, we would do:
+
+.. code-block:: yaml
+
+  $setup: [data1]
+  $execute: [data1, model1:setup, model1:execute]
+
+which is actually equivalent to:
+
+.. code-block:: yaml
+
+  $setup: [data1]
+  $execute: [data1, model1]
+
+because the pipeline will understand that ``model1`` should be set up before being executed in the pipeline's ``execute`` step.
+One can have any variation upon this, e.g.:
+
+.. code-block:: yaml
+
+  $setup: [data1:execute, model1]
+  $execute: [model1]
+
+will run ``data1`` ``setup`` and ``execute`` and ``model1`` ``setup`` in the pipeline's ``setup`` step, then execute ``model1``
+in the pipeline's ``execute`` step. Finally, ``data1`` and ``model1`` will be cleaned up in the pipeline's ``cleanup`` step.
 
 .. note::
 
-  The ``execute`` function of each module is called at *each iteration*. This meaning depends on the context.
-  If your (sub)pipeline performs an MCMC sampling, for example, then the top ``execute`` of this pipeline will be called at each MCMC step.
-  But we can imagine that we loop on different data vectors instead. In this case, ``execute`` will be called for each of this vector.
-  For example, we want to estimate the power spectrum of a mock catalogue, then perform cosmological inference.
-  Our top base pipeline would run the modules corresponding to the power spectrum estimator, and the sampler.
-  One could also imagine generating mocks before estimating their power spectrum, etc.
+  If your (sub)pipeline performs MCMC sampling, for example, then the step ``execute`` of this pipeline will naturally be called at each MCMC step.
+  But we can imagine that we loop on different data vectors instead. In this case, ``execute`` will be called for each of these vectors.
+
+Let us move to specificities of pre-implemented pipelines.
+
+In :class:`StreamPipeline`, ``data_block`` is directly passed on to different modules, without (shallow) copy. Hence:
+
+.. code-block:: yaml
+
+  main:
+    $module_name: pypescript
+    $module_class: BasePipeline
+    $modules: [pipe1, pipe2]
+
+  pipe1:
+    $module_name: pypescript
+    $module_class: StreamPipeline
+    $modules: [module1, module2]
+
+is equivalent to:
+
+.. code-block:: yaml
+
+  main:
+    $module_name: pypescript
+    $module_class: BasePipeline
+    $modules: [module1, module2, pipe2]
+
+i.e. ``pipe2`` will see the outputs of ``module1``, ``module2`` in ``data_block``.
+
+In :class:`MPIPipeline`, whatever is performed in the ``execute`` step is repeated and distributed with MPI.
+Of course, it does not make sense to repeat *exactly* the same task, so we shall update ``config_block`` and/or ``data_block``.
+In this example:
+
+.. code-block:: yaml
+
+  main:
+    $module_name: pypescript
+    $module_class: BasePipeline
+    $modules: [pipe1, pipe2]
+
+  pipe1:
+    $module_name: pypescript
+    $module_class: MPIPipeline
+    $nprocs_per_task: 2
+    $modules: [module1, module2]
+    $configblock_iter:
+      module1.xlim: [[0.02, 0.3], [0.02, 0.2], [0.02, 0.1]]
+      module1.value: e'lambda i:i+1'
+    $datablock_iter:
+      data.input: [a, b, c]
+    $datablock_key_iter:
+      data.result: [result_0, result_1, result_2]
+
+  module1:
+    ...
+    xlim: [0, 0.5]
+    value: 1
+
+``module1`` and ``module2`` will first be set up at ``main``'s ``setup`` step.
+Then ``module1`` and ``module2``'s ``execute`` will be run on three different batches of ``nprocs_per_task`` processes.
+In the first batch, ``xlim`` and ``value`` options of ``module1`` are set to ``[0.02, 0.3]``, ``1`` respectively.
+The ``(data, input)`` data_block entry is set to ``'a'``, and the object in data_block entry ``(data, result)``
+(e.g. as put by ``module1`` in this batch) is broadcast to data_block entry ``(data, result_0)`` (which can be seen by e.g. ``pipe2``).
+In the second batch, ``xlim`` and ``value`` options of ``module1`` are set to ``[0.02, 0.2]``, ``2`` respectively.
+The ``(data, input)`` data_block entry is set to ``'b'``, and the object in data_block entry ``(data, result)`` is broadcast to data_block entry ``(data, result_1)``.
+In the third batch, ``xlim`` and ``value`` options of ``module1`` are set to ``[0.02, 0.1]``, ``3`` respectively.
+The ``(data, input)`` data_block entry is set to ``'c'``, and the object in data_block entry ``(data, result)`` is broadcast to data_block entry ``(data, result_2)``.
+In the end, ``data_block`` objects in ``(data, result_0)``, ``(data, result_1)``, ``(data, result_2)`` are available for further processing in e.g. ``pipe2``.
+
+
+:class:`BatchPipeline` (which has not been thoroughfully tested) follows the same spirit as :class:`MPIPipeline` but instead
+of creating batches of MPI processes, dump the ``data_block`` to disk, with an appropriate confiuration file, and launch **pypescript** with these new inputs.
+
+.. code-block:: yaml
+
+  main:
+    $module_name: pypescript
+    $module_class: BasePipeline
+    $modules: [pipe1, pipe2]
+
+  pipe1:
+    $module_name: pypescript
+    $module_class: BatchPipeline
+    $nprocs_per_task: 2
+    $modules: [module1, module2]
+    $configblock_iter:
+      module1.xlim: [[0.02, 0.3], [0.02, 0.2], [0.02, 0.1]]
+      module1.value: e'lambda i:i+1'
+    $datablock_iter:
+      data.input: [a, b, c]
+    $datablock_key_iter:
+      data.result: [result_0, result_1, result_2]
+    job_dir: jobs/
+    job_template: job-template.sh
+    job_options:
+      time: 02.00.00
+    job_submit: sbatch
+
+  module1:
+    ...
+    xlim: [0, 0.5]
+    value: 1
+
+Here, ``data_block`` and configuration files will be saved in ``job_dir`` (``'jobs/'``).
+Jobs will be submitted with command ``sbatch``, with a script based on ``job_template`` (``'job-template.sh'``) to be filled with options specified in ``job_options``.
+Resulting ``data_block`` will be dumped to disk by each job. Then the current job will reload them, and make ``data_block`` objects in
+``(data, result_0)``, ``(data, result_1)``, ``(data, result_2)`` available for further processing in e.g. ``pipe2``.
+
 
 Configuration file shortcuts
 ----------------------------
@@ -224,7 +400,7 @@ Mapping (references)
   ultimate:
     question: $&{answer.to}
 
-Here the ``config_block`` entry ``(ultimate, question)`` will refer to ``(answer, to)`` (meaning any change to the latter in the process of the pipeline will affect as well the former).
+Here the ``config_block`` entry ``(ultimate, question)`` will refer to ``(answer, to)`` (meaning any change to the latter in the process of the pipeline will affect the former as well).
 
 Eval pattern
 ^^^^^^^^^^^^
